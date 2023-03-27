@@ -1,5 +1,7 @@
 # Wirevad
 
+Inspired by https://www.reddit.com/r/WireGuard/comments/ekeprt/wireguard_to_wireguard_setup_im_sure_many_have/
+
 Sets up Wireguard inside Docker with two interfaces - one utilising Mullvad as a client, one acting as a server for your devices. 
 
 Internet traffic is routed via Mullvad, LAN traffic is not - so you can access your local devices such as cameras or self-hosted projects.
