@@ -38,3 +38,11 @@ services:
     privileged: true
 
 ```
+
+Run ```docker-compose up -d```
+
+NOTE: 
+
+When restarting the container, the original config files are used.
+
+If you recreate the container, you will get new public/private keys so will need to reconfigure client devices.
