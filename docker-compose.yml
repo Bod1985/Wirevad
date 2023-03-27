@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+  wirevad:
+    image: bod1985/wirevad:latest
+    environment:
+      - DOMAIN=example.com
+      - PORT=51820
+      - INTERFACE=eth0
+      - LAN_SUBNET=192.168.1.0/24
+      - DNS_SERVER=192.168.1.5
+      - FWMARK=51820
+      - MULLVAD_PRIVATEKEY=
+      - MULLVAD_ADDRESS=
+      - MULLVAD_DNS=
+      - MULLVAD_PUBLICKEY=
+      - MULLVAD_ENDPOINT=
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    container_name: wirevad
+    volumes:
+      - /opt/wirevad:/opt/wirevad
+    restart: unless-stopped
+    ports:
+      - 51820:51820/udp
+    privileged: true
