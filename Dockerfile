@@ -13,7 +13,7 @@ RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
 RUN ["chmod", "+x", "/app/setup.sh"]
 EXPOSE 51822
-CMD ["sh", "./setup.sh"]
+CMD ["./setup.sh"]
 
 #The following is from https://www.devopsforit.com/posts/anatomy-of-a-dockerfile-build-a-docker-image
 

@@ -82,7 +82,7 @@ else
     PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
     PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
 EOF
-    for ((i=1; i<=$((NUMBER_OF_CLIENTS)); i++)) do
+    for ((i=1; i<=$NUMBER_OF_CLIENTS; i++)) do
         wg genkey | tee privatekey_client | wg pubkey > publickey_client
         CLIENT_PRIVATE=$(cat privatekey_client)
         CLIENT_PUBLIC=$(cat publickey_client)
