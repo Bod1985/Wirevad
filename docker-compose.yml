@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   wirevad:
-    image: ghcr.io/bod1985/wirevad
+    image: ghcr.io/bod1985/wirevad:latest
     environment:
       - DOMAIN=example.com
       - PORT=51820
