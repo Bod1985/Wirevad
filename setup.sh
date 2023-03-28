@@ -1,8 +1,18 @@
 #!/bin/bash
 cd /opt/wirevad
 
-wg-quick down wirevadmullvad
-wg-quick down wirevadhost
+FILE=/etc/wireguard/wirevadmullvad.conf
+if [ -f "$FILE" ]; then
+    echo "$FILE exists. Bringing down interface as a precaution."
+    wg-quick down wirevadmullvad
+    
+fi
+
+FILE=/etc/wireguard/wirevadhost.conf
+if [ -f "$FILE" ]; then
+    echo "$FILE exists. Bringing down interface as a precaution."
+    wg-quick down wirevadhost
+fi
 
 sleep 1
 
@@ -148,24 +158,25 @@ EOF
     AllowedIPs = 0.0.0.0/0
     Endpoint = $DOMAIN:$PORT
 EOF
-    echo "Your WireGuard config is located at /opt/wirevad/wirevad1.conf and /opt/wirevad/wirevad2.conf and /opt/wirevad/wirevad3.conf - don't forget to update your client devices with the new config!"
+    echo "Your WireGuard config files are located at /opt/wirevad/- don't forget to update your client devices with the new config!"
 fi
 
 
 sysctl -p
 
-cp /opt/wirevad/wirevadhost.conf /etc/wireguard/wirevadhost.conf
-cp /opt/wirevad/wirevadmullvad.conf /etc/wireguard/wirevadmullvad.conf
 
+cp /opt/wirevad/wirevadmullvad.conf /etc/wireguard/wirevadmullvad.conf
 wg-quick up wirevadmullvad
 
 printf "+---------------------------------------------------------------------------+\n"
 curl "https://am.i.mullvad.net/connected"
 printf "+---------------------------------------------------------------------------+\n"
 
+cp /opt/wirevad/wirevadhost.conf /etc/wireguard/wirevadhost.conf
 wg-quick up wirevadhost
 
-chmod -R 777 /opt/wirevad
+rm -f /opt/publickey_*
+rm -f /opt/privatekey_*
 
 
 sleep infinity
