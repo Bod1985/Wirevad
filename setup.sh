@@ -82,7 +82,6 @@ PostUp  = iptables -t nat -A POSTROUTING -o wirevadmullvad -j MASQUERADE
 PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
 PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
 EOF
-    NUMBER_OF_CLIENTS=5
     for ((i=1; i<=$NUMBER_OF_CLIENTS; i++))
     do
         wg genkey | tee privatekey_client | wg pubkey > publickey_client
