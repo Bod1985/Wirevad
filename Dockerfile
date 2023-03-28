@@ -2,18 +2,20 @@ FROM debian
 
 WORKDIR /app
 
-ADD setup.sh /app
+ADD server.py /app
 
 RUN \
   echo "**** install dependencies ****" && \
   apt-get update && \
-  apt-get install -y --no-install-recommends wireguard-tools iproute2 openresolv sudo curl iptables ca-certificates procps iputils-ping net-tools
+  apt-get install -y --no-install-recommends wireguard-tools iproute2 openresolv sudo curl iptables ca-certificates procps iputils-ping net-tools python3 pip && \
+  pip install qrcode
 
 RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
-RUN ["chmod", "+x", "/app/setup.sh"]
 EXPOSE 51822
-CMD ["./setup.sh"]
+EXPOSE 8000
+
+CMD ["python3", "-u", "server.py"]
 
 #The following is from https://www.devopsforit.com/posts/anatomy-of-a-dockerfile-build-a-docker-image
 
