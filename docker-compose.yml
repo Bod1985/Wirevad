@@ -24,4 +24,5 @@ services:
     restart: unless-stopped
     ports:
       - 51820:51820/udp
+      - 8000:8000/tcp
     privileged: true
