@@ -8,9 +8,7 @@ Sets up Wireguard inside Docker with two interfaces - one utilising Mullvad as a
 
 Internet traffic is routed via Mullvad, LAN traffic is not - so you can access your local devices such as cameras or self-hosted projects.
 
-Comes with a WebUI serving the QR Codes and config file Download links
-
-<img src="https://user-images.githubusercontent.com/1529155/228369335-7c3dbdef-b431-4e09-a9d6-6a9f832884e4.jpg" width="200">
+Comes with a WebUI serving the QR Codes and config file Download links.
 
 To get started:
 
