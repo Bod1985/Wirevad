@@ -46,9 +46,3 @@ services:
 ```
 
 Run ```docker-compose up -d```
-
-NOTE: 
-
-When restarting the container, the previous config files are used.
-
-If you recreate the container, you will get new public/private keys so will need to reconfigure client devices. I plan to make use of the volume mount in future to improve this behaviour
