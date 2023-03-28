@@ -17,7 +17,7 @@ Edit docker-compose.yml
 version: "3.8"
 services:
   wirevad:
-    image: bod1985/wirevad:latest
+    image: ghcr.io/bod1985/wirevad
     environment:
       - DOMAIN=example.com #The domain used to connect from outside your LAN
       - PORT=51820 #UDP Port that's forwarded for you to establish a connection
