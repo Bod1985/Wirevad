@@ -60,29 +60,29 @@ else
 
     # Server CONF
     cat > /opt/wirevad/wirevadhost.conf <<EOF
-[Interface]
-Address = 10.10.12.1/24
-FwMark = 51820
-ListenPort = $PORT
-PrivateKey = $SERVER_PRIVATE
+    [Interface]
+    Address = 10.10.12.1/24
+    FwMark = 51820
+    ListenPort = $PORT
+    PrivateKey = $SERVER_PRIVATE
 
-# Forwarding...
-PostUp  = iptables -A FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
-PostUp  = iptables -A FORWARD -i %i -j ACCEPT
-PostUp  = iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-PostUp  = iptables -A FORWARD -j REJECT
-PreDown = iptables -D FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
-PreDown = iptables -D FORWARD -i %i -j ACCEPT
-PreDown = iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-PreDown = iptables -D FORWARD -j REJECT
+    # Forwarding...
+    PostUp  = iptables -A FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
+    PostUp  = iptables -A FORWARD -i %i -j ACCEPT
+    PostUp  = iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    PostUp  = iptables -A FORWARD -j REJECT
+    PreDown = iptables -D FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
+    PreDown = iptables -D FORWARD -i %i -j ACCEPT
+    PreDown = iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    PreDown = iptables -D FORWARD -j REJECT
 
-# NAT...
-PostUp  = iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE
-PostUp  = iptables -t nat -A POSTROUTING -o wirevadmullvad -j MASQUERADE
-PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
-PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
+    # NAT...
+    PostUp  = iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE
+    PostUp  = iptables -t nat -A POSTROUTING -o wirevadmullvad -j MASQUERADE
+    PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
+    PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
 EOF
-    for ((i=1; i<=$NUMBER_OF_CLIENTS; i++)) do
+    for ((i=1; i<=$((NUMBER_OF_CLIENTS)); i++)) do
         wg genkey | tee privatekey_client | wg pubkey > publickey_client
         CLIENT_PRIVATE=$(cat privatekey_client)
         CLIENT_PUBLIC=$(cat publickey_client)
