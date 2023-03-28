@@ -30,6 +30,7 @@ services:
       - MULLVAD_DNS=10.64.0.1 #The DNS copied from a mullvad Wireguard config file. 10.64.0.1 is universal for Mullvad
       - MULLVAD_PUBLICKEY= #Your publickey copied from a mullvad Wireguard config file
       - MULLVAD_ENDPOINT= #The endpoint address copied from a mullvad Wireguard config file
+      - NUMBER_OF_CLIENTS=1 #How many client configs (peers) you would like creating
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
