@@ -1,17 +1,17 @@
 #!/bin/bash
-cd /etc/wireguard
+cd /opt/wirevad
 
 wg-quick down wirevadmullvad
 wg-quick down wirevadhost
 
 sleep 1
 
-FILE=/etc/wireguard/wirevadmullvad.conf
+FILE=/opt/wirevad/wirevadmullvad.conf
 if [ -f "$FILE" ]; then
     echo "$FILE exists. Skipping creation of new keys."
 else
     echo "$FILE does not exist. Creating new keys."
-    cat > /etc/wireguard/wirevadmullvad.conf <<EOF
+    cat > /opt/wirevad/wirevadmullvad.conf <<EOF
     [Interface]
     Address = $MULLVAD_ADDRESS
     FwMark = $FWMARK
@@ -34,11 +34,12 @@ EOF
 fi
 
 
-FILE=/etc/wireguard/wirevadhost.conf
+FILE=/opt/wirevad/wirevadhost.conf
 if [ -f "$FILE" ]; then
     echo "$FILE exists. Skipping creation of new keys."
 else
     echo "$FILE does not exist. Creating new keys."
+    rm -f /opt/wirevadclient*.conf
     sed -i 's/#net.ipv4.ip_forward=/net.ipv4.ip_forward=/'  /etc/sysctl.conf
     umask 077
     wg genkey | tee privatekey_server | wg pubkey > publickey_server
@@ -67,7 +68,7 @@ else
     echo "public: $(cat publickey_server)"
 
     # Server CONF
-    cat > /etc/wireguard/wirevadhost.conf <<EOF
+    cat > /opt/wirevad/wirevadhost.conf <<EOF
     [Interface]
     Address = 10.10.12.1/24
     FwMark = 51820
@@ -112,7 +113,7 @@ else
 EOF
 
     # Client CONF
-    cat > /opt/wirevad/wirevad1.conf <<EOF
+    cat > /opt/wirevad/wirevadclient1.conf <<EOF
     [Interface]
     Address = 10.10.12.2/24
     PrivateKey = $CLIENT_PRIVATE
@@ -124,7 +125,7 @@ EOF
     Endpoint = $DOMAIN:$PORT
 EOF
 
-    cat > /opt/wirevad/wirevad2.conf <<EOF
+    cat > /opt/wirevad/wirevadclient2.conf <<EOF
     [Interface]
     Address = 10.10.12.3/24
     PrivateKey = $CLIENT_PRIVATE1
@@ -136,7 +137,7 @@ EOF
     Endpoint = $DOMAIN:$PORT
 EOF
 
-    cat > /opt/wirevad/wirevad3.conf <<EOF
+    cat > /opt/wirevad/wirevadclient3.conf <<EOF
     [Interface]
     Address = 10.10.12.4/24
     PrivateKey = $CLIENT_PRIVATE2
@@ -152,6 +153,9 @@ fi
 
 
 sysctl -p
+
+cp /opt/wirevad/wirevadhost.conf /etc/wireguard/wirevadhost.conf
+cp /opt/wirevad/wirevadmullvad.conf /etc/wireguard/wirevadmullvad.conf
 
 wg-quick up wirevadmullvad
 
