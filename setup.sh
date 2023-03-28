@@ -18,146 +18,100 @@ sleep 1
 
 FILE=/opt/wirevad/wirevadmullvad.conf
 if [ -f "$FILE" ]; then
-    echo "$FILE exists. Skipping creation of new keys."
+    echo "$FILE exists. Skipping creation of new keys & config."
 else
-    echo "$FILE does not exist. Creating new keys."
+    echo "$FILE does not exist. Creating new keys & config."
     cat > /opt/wirevad/wirevadmullvad.conf <<EOF
-    [Interface]
-    Address = $MULLVAD_ADDRESS
-    FwMark = $FWMARK
-    PrivateKey = $MULLVAD_PRIVATEKEY
-    DNS = $MULLVAD_DNS
-    
-    PostUp  = iptables -t mangle -A OUTPUT -d 10.10.12.0/24,$LAN_SUBNET -j MARK --set-mark 51820
-    PreDown = iptables -t mangle -D OUTPUT -d 10.10.12.0/24,$LAN_SUBNET -j MARK --set-mark 51820 
-    PostUp  = iptables -I OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT
-    PreDown = iptables -D OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT 
-    PostUp =  ip route add $LAN_SUBNET via $(ip route | grep default | awk '{print $3}'); iptables -I OUTPUT -d $LAN_SUBNET -j ACCEPT
-    PreDown = ip route del $LAN_SUBNET via $(ip route | grep default | awk '{print $3}'); iptables -D OUTPUT -d $LAN_SUBNET -j ACCEPT
+[Interface]
+Address = $MULLVAD_ADDRESS
+FwMark = $FWMARK
+PrivateKey = $MULLVAD_PRIVATEKEY
+DNS = $MULLVAD_DNS
 
-    [Peer]
-    # Phone
-    PublicKey = $MULLVAD_PUBLICKEY
-    AllowedIPs = 0.0.0.0/0
-    Endpoint = $MULLVAD_ENDPOINT
+PostUp  = iptables -t mangle -A OUTPUT -d 10.10.12.0/24,$LAN_SUBNET -j MARK --set-mark 51820
+PreDown = iptables -t mangle -D OUTPUT -d 10.10.12.0/24,$LAN_SUBNET -j MARK --set-mark 51820 
+PostUp  = iptables -I OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT
+PreDown = iptables -D OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT 
+PostUp =  ip route add $LAN_SUBNET via $(ip route | grep default | awk '{print $3}'); iptables -I OUTPUT -d $LAN_SUBNET -j ACCEPT
+PreDown = ip route del $LAN_SUBNET via $(ip route | grep default | awk '{print $3}'); iptables -D OUTPUT -d $LAN_SUBNET -j ACCEPT
+
+[Peer]
+# Phone
+PublicKey = $MULLVAD_PUBLICKEY
+AllowedIPs = 0.0.0.0/0
+Endpoint = $MULLVAD_ENDPOINT
 EOF
 fi
 
 
 FILE=/opt/wirevad/wirevadhost.conf
 if [ -f "$FILE" ]; then
-    echo "$FILE exists. Skipping creation of new keys."
+    echo "$FILE exists. Skipping creation of new keys & config."
 else
-    echo "$FILE does not exist. Creating new keys."
+    echo "$FILE does not exist. Creating new keys & config."
     rm -f /opt/wirevadclient*.conf
     sed -i 's/#net.ipv4.ip_forward=/net.ipv4.ip_forward=/'  /etc/sysctl.conf
     umask 077
     wg genkey | tee privatekey_server | wg pubkey > publickey_server
-    wg genkey | tee privatekey_client | wg pubkey > publickey_client
+    
 
     SERVER_PRIVATE=$(cat privatekey_server)
     SERVER_PUBLIC=$(cat publickey_server)
-    CLIENT_PRIVATE=$(cat privatekey_client)
-    CLIENT_PUBLIC=$(cat publickey_client)
-
-    wg genkey | tee privatekey_client | wg pubkey > publickey_client
-
-    CLIENT_PRIVATE1=$(cat privatekey_client)
-    CLIENT_PUBLIC1=$(cat publickey_client)
-
-    wg genkey | tee privatekey_client | wg pubkey > publickey_client
-
-    CLIENT_PRIVATE2=$(cat privatekey_client)
-    CLIENT_PUBLIC2=$(cat publickey_client)
-
-    wg genkey | tee privatekey_client | wg pubkey > publickey_client
-
-    CLIENT_PRIVATE3=$(cat privatekey_client)
-    CLIENT_PUBLIC3=$(cat publickey_client)
-
-    echo "public: $(cat publickey_server)"
 
     # Server CONF
     cat > /opt/wirevad/wirevadhost.conf <<EOF
-    [Interface]
-    Address = 10.10.12.1/24
-    FwMark = 51820
-    ListenPort = $PORT
-    PrivateKey = $SERVER_PRIVATE
+[Interface]
+Address = 10.10.12.1/24
+FwMark = 51820
+ListenPort = $PORT
+PrivateKey = $SERVER_PRIVATE
 
-    # Forwarding...
-    PostUp  = iptables -A FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
-    PostUp  = iptables -A FORWARD -i %i -j ACCEPT
-    PostUp  = iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-    PostUp  = iptables -A FORWARD -j REJECT
-    PreDown = iptables -D FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
-    PreDown = iptables -D FORWARD -i %i -j ACCEPT
-    PreDown = iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-    PreDown = iptables -D FORWARD -j REJECT
+# Forwarding...
+PostUp  = iptables -A FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
+PostUp  = iptables -A FORWARD -i %i -j ACCEPT
+PostUp  = iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+PostUp  = iptables -A FORWARD -j REJECT
+PreDown = iptables -D FORWARD -o $INTERFACE ! -d $LAN_SUBNET -j REJECT
+PreDown = iptables -D FORWARD -i %i -j ACCEPT
+PreDown = iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+PreDown = iptables -D FORWARD -j REJECT
 
-    # NAT...
-    PostUp  = iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE
-    PostUp  = iptables -t nat -A POSTROUTING -o wirevadmullvad -j MASQUERADE
-    PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
-    PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
+# NAT...
+PostUp  = iptables -t nat -A POSTROUTING -o $INTERFACE -j MASQUERADE
+PostUp  = iptables -t nat -A POSTROUTING -o wirevadmullvad -j MASQUERADE
+PreDown = iptables -t nat -D POSTROUTING -o $INTERFACE -j MASQUERADE
+PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
+EOF
+    NUMBER_OF_CLIENTS=5
+    for ((i=1; i<=$NUMBER_OF_CLIENTS; i++))
+    do
+        wg genkey | tee privatekey_client | wg pubkey > publickey_client
+        CLIENT_PRIVATE=$(cat privatekey_client)
+        CLIENT_PUBLIC=$(cat publickey_client)
+        FILE="/opt/wirevad/wirevadclient$i.conf"
+        LAST_IP=$((i+1))
+        ALLOWED_IP="10.10.12.$LAST_IP/32"
+        IP="10.10.12.$LAST_IP/24"
+        echo "[Peer]" >> /opt/wirevad/wirevadhost.conf
+        echo "PublicKey = $CLIENT_PUBLIC" >> /opt/wirevad/wirevadhost.conf
+        echo "AllowedIPs = $ALLOWED_IP" >> /opt/wirevad/wirevadhost.conf
 
-    [Peer]
-    # Phone
-    PublicKey = $CLIENT_PUBLIC
-    AllowedIPs = 10.10.12.2/32
+        cat > $FILE <<EOF
+        [Interface]
+        Address = $IP
+        PrivateKey = $CLIENT_PRIVATE
+        DNS = $DNS_SERVER
 
-    [Peer]
-    # Phone
-    PublicKey = $CLIENT_PUBLIC1
-    AllowedIPs = 10.10.12.3/32
-
-    [Peer]
-    # Phone
-    PublicKey = $CLIENT_PUBLIC2
-    AllowedIPs = 10.10.12.4/32
-
-    [Peer]
-    # Phone
-    PublicKey = $CLIENT_PUBLIC3
-    AllowedIPs = 10.10.12.5/32
+        [Peer]
+        PublicKey = $SERVER_PUBLIC
+        AllowedIPs = 0.0.0.0/0
+        Endpoint = $DOMAIN:$PORT
 EOF
 
-    # Client CONF
-    cat > /opt/wirevad/wirevadclient1.conf <<EOF
-    [Interface]
-    Address = 10.10.12.2/24
-    PrivateKey = $CLIENT_PRIVATE
-    DNS = $DNS_SERVER
+    done
+    
+    
 
-    [Peer]
-    PublicKey = $SERVER_PUBLIC
-    AllowedIPs = 0.0.0.0/0
-    Endpoint = $DOMAIN:$PORT
-EOF
-
-    cat > /opt/wirevad/wirevadclient2.conf <<EOF
-    [Interface]
-    Address = 10.10.12.3/24
-    PrivateKey = $CLIENT_PRIVATE1
-    DNS = $DNS_SERVER
-
-    [Peer]
-    PublicKey = $SERVER_PUBLIC
-    AllowedIPs = 0.0.0.0/0
-    Endpoint = $DOMAIN:$PORT
-EOF
-
-    cat > /opt/wirevad/wirevadclient3.conf <<EOF
-    [Interface]
-    Address = 10.10.12.4/24
-    PrivateKey = $CLIENT_PRIVATE2
-    DNS = $DNS_SERVER
-
-    [Peer]
-    PublicKey = $SERVER_PUBLIC
-    AllowedIPs = 0.0.0.0/0
-    Endpoint = $DOMAIN:$PORT
-EOF
     echo "Your WireGuard config files are located at /opt/wirevad/- don't forget to update your client devices with the new config!"
 fi
 
@@ -175,8 +129,8 @@ printf "+-----------------------------------------------------------------------
 cp /opt/wirevad/wirevadhost.conf /etc/wireguard/wirevadhost.conf
 wg-quick up wirevadhost
 
-rm -f /opt/publickey_*
-rm -f /opt/privatekey_*
+rm -f /opt/wirevad/publickey_*
+rm -f /opt/wirevad/privatekey_*
 
-
+chmod -R 777 /opt/wirevad
 sleep infinity

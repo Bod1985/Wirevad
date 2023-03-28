@@ -14,6 +14,7 @@ services:
       - MULLVAD_DNS=
       - MULLVAD_PUBLICKEY=
       - MULLVAD_ENDPOINT=
+      - NUMBER_OF_CLIENTS=1
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
