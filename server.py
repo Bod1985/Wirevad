@@ -190,8 +190,9 @@ def download(file_path):
 def main():
   """Main function to execute the script."""
   os.chdir('/opt/wirevad')
-
+  print("WireVad is starting...")
   wg_createmullvad()
+  print("Mullvad is starting...")
   wg_createclientandpeers(NUMBER_OF_CLIENTS)
 
   subprocess.run(['sysctl', '-p'])
@@ -201,6 +202,7 @@ def main():
   print(result.stdout.decode())
   subprocess.run(['cp', '/opt/wirevad/wirevadhost.conf', '/etc/wireguard/wirevadhost.conf'])
   subprocess.run(['wg-quick', 'up', 'wirevadhost'])
+  print("WireGuard is starting...")
   subprocess.run(['rm', '-f', '/opt/wirevad/publickey_*'])
   subprocess.run(['rm', '-f', '/opt/wirevad/privatekey_*'])
   subprocess.run(['chmod', '-R', '777', '/opt/wirevad'])
