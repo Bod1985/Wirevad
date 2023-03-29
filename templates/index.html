@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QR Codes</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+    <body>
+        <h1>QR Codes for WireGuard Peers</h1>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            {% for message in messages %}
+        <div class="flash">{{ message }}</div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        
+        <div class="qr-codes">
+            {% for qr in qr_codes %}
+                <div class="qr-code">
+                    <h3>{{ qr.name }}</h3>
+                    <img src="{{ url_for('static', filename=qr.image) }}" alt="{{ qr.name }} QR Code" />
+                    <a href="{{ qr.link }}" download="{{ qr.name }}">Download Config</a>
+                </div>
+            {% endfor %}
+        </div>
+        <form action="{{ url_for('add_peer') }}" method="post">
+        <button type="submit">Add Peer</button>
+        </form>
+    </body>
+  </html>

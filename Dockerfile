@@ -8,7 +8,7 @@ RUN \
   echo "**** install dependencies ****" && \
   apt-get update && \
   apt-get install -y --no-install-recommends wireguard-tools iproute2 openresolv sudo curl iptables ca-certificates procps iputils-ping net-tools python3 pip && \
-  pip install qrcode
+  pip install qrcode flask
 
 RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
