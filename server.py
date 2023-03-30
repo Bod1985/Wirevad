@@ -99,6 +99,8 @@ def wg_createhost(num_of_clients):
 
     with open("publickey_server") as f:
       SERVER_PUBLIC = f.read().strip()
+    
+    os.system("cp publickey_server /opt/wirevad/publickey_server")
 
     # Server CONF
     with open("/opt/wirevad/wirevadhost.conf", "w") as f:
@@ -196,7 +198,7 @@ def wg_addpeers(num_of_peers):
   public_key = os.popen('wg pubkey < privatekey_client').read().strip()
   with open('publickey_client', 'w') as f:
     f.write(public_key)
-  with open("publickey_server") as f:
+  with open("/opt/wirevad/publickey_server") as f:
     SERVER_PUBLIC = f.read().strip()
   for i in range(last_peer + 1, last_peer + int(num_of_peers) + 1):
     private_key = os.popen('wg genkey').read().strip()
