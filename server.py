@@ -74,6 +74,9 @@ PostUp  = iptables -I OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-
 PreDown = iptables -D OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT
 PostUp =  ip route add {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -I OUTPUT -d {LAN_SUBNET} -j ACCEPT
 PreDown = ip route del {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -D OUTPUT -d {LAN_SUBNET} -j ACCEPT
+PostUp = iptables -t nat -A PREROUTING -p tcp --dport 8000 -d {LAN_SUBNET} -j DNAT --to-destination 127.0.0.1:8000
+PreDown = iptables -t nat -D PREROUTING -p tcp --dport 8000 -d {LAN_SUBNET} -j DNAT --to-destination 127.0.0.1:8000
+
 
 [Peer]
 PublicKey = {MULLVAD_PUBLICKEY}
@@ -99,6 +102,8 @@ def wg_createhost(num_of_clients):
 
     with open("publickey_server") as f:
       SERVER_PUBLIC = f.read().strip()
+    
+    os.system("cp publickey_server /opt/wirevad/publickey_server")
 
     # Server CONF
     with open("/opt/wirevad/wirevadhost.conf", "w") as f:
@@ -196,7 +201,7 @@ def wg_addpeers(num_of_peers):
   public_key = os.popen('wg pubkey < privatekey_client').read().strip()
   with open('publickey_client', 'w') as f:
     f.write(public_key)
-  with open("publickey_server") as f:
+  with open("/opt/wirevad/publickey_server") as f:
     SERVER_PUBLIC = f.read().strip()
   for i in range(last_peer + 1, last_peer + int(num_of_peers) + 1):
     private_key = os.popen('wg genkey').read().strip()
