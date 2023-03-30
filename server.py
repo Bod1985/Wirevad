@@ -74,9 +74,6 @@ PostUp  = iptables -I OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-
 PreDown = iptables -D OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT
 PostUp =  ip route add {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -I OUTPUT -d {LAN_SUBNET} -j ACCEPT
 PreDown = ip route del {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -D OUTPUT -d {LAN_SUBNET} -j ACCEPT
-PostUp = iptables -t nat -A PREROUTING -p tcp --dport 8000 -d {LAN_SUBNET} -j DNAT --to-destination 127.0.0.1:8000
-PreDown = iptables -t nat -D PREROUTING -p tcp --dport 8000 -d {LAN_SUBNET} -j DNAT --to-destination 127.0.0.1:8000
-
 
 [Peer]
 PublicKey = {MULLVAD_PUBLICKEY}
