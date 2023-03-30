@@ -346,7 +346,6 @@ def run_flask_app():
 
 def main():
   """Main function to execute the script."""
-  os.chdir('/opt/wirevad')
   wg_createmullvad()
   wg_createhost(NUMBER_OF_CLIENTS)
   wg_up('wirevadmullvad')
