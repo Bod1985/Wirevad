@@ -2,9 +2,9 @@ FROM debian
 
 WORKDIR /app
 
-ADD server.py /app && \
-  ADD templates /app/templates && \
-  ADD static /app/static
+ADD server.py /app
+ADD templates /opt/wirevad/templates
+ADD static /opt/wirevad/static
 
 RUN \
   echo "**** install dependencies ****" && \
