@@ -24,7 +24,7 @@ NUMBER_OF_CLIENTS = os.environ.get('NUMBER_OF_CLIENTS')
 DNS_SERVER = os.environ.get('DNS_SERVER')
 DOMAIN = os.environ.get('DOMAIN')
 
-app = Flask(__name__, template_folder='/opt/wirevad/templates', static_folder='/opt/wirevad/static')
+app = Flask(__name__, template_folder='/app/templates', static_folder='/app/static')
 app.config['SECRET_KEY'] = 'LOLGPTWROTETHISFORMELOL'
 
 def wg_down(interface):
@@ -266,7 +266,7 @@ def wg_removepeer(peer_index):
 
   os.system(f"rm -f /opt/wirevad/privatekey_{public_key}.key")
   os.system(f"rm -f /opt/wirevad/wirevadclient{peer_index}.conf")
-  os.system(f"rm -f /opt/wirevad/static/wirevadclient{peer_index}.conf.png")
+  os.system(f"rm -f /app/static/wirevadclient{peer_index}.conf.png")
   with open(FILE, 'w') as f:
     for i, section in enumerate(peer_sections):
       if i != peer_index:
