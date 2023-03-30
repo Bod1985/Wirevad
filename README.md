@@ -12,6 +12,13 @@ Comes with a WebUI serving the QR Codes and config file Download links.
 
 To get started:
 
+Install Wireguard on the host machine/VM by running
+
+```
+sudo apt-get update
+sudo apt-get install wireguard-dkms
+```
+
 
 Edit docker-compose.yml 
 
