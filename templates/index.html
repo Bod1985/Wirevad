@@ -41,14 +41,14 @@
         <div class="buttons">
             <div class="add-peer-container">
                 <form id="add-peer-form" action="{{ url_for('add_peer') }}" method="post">
-                    <button type="submit" onclick="showLoadingAnimation()">Add Peer</button>
-                </form>
-                <div id="add-peer-loading">
-                    <div class="circle"></div>
-                    <div class="circle"></div>
-                    <div class="circle"></div>
-                    <div class="circle"></div>
-                </div>                  
+                    <button type="submit">Add Peer</button>
+                    <div class="add-loading">
+                        <div class="circle"></div>
+                        <div class="circle"></div>
+                        <div class="circle"></div>
+                        <div class="circle"></div>
+                    </div> 
+                </form>                 
             </div>
         </div>
           
@@ -61,9 +61,15 @@
                     <a href="{{ qr.link }}" download="{{ qr.name }}" class="download-link">
                         <button type="button">Download</button>
                     </a>
-                    <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', ''))[-1]|int) }}" method="post">
+                    <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', '')|replace('wirevadclient',''))|int) }}" method="post">
                         <button type="submit" class="remove-button">Remove</button>
-                    </form>          
+                        <div class="remove-loading">
+                            <div class="circle"></div>
+                            <div class="circle"></div>
+                            <div class="circle"></div>
+                            <div class="circle"></div>
+                        </div>
+                    </form>      
                 </div>
             {% endfor %}
         </div>
@@ -93,16 +99,42 @@
             checkConnection(); // Initial check on page load
 
             setInterval(checkConnection, 5000); // Check every 5 seconds
-
-            function showLoadingAnimation() {
-                var loadingAnimation = document.getElementById('add-peer-loading');
-                var addPeerForm = document.getElementById('add-peer-form');
-                addPeerForm.style.display = 'none';
-                loadingAnimation.style.display = 'flex';
+            
+            function showLoadingAnimation(button, loadingDiv) {
+                button.style.display = 'none';
+                loadingDiv.style.display = 'flex';
                 setTimeout(function() {
-                    loadingAnimation.style.display = 'none';
+                    loadingDiv.style.display = 'none';
+                    button.style.display = 'inline-block';
                 }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
             }
+
+            const addPeerForm = document.getElementById('add-peer-form');
+            const addButton = addPeerForm.querySelector('button');
+            const addLoadingDiv = addPeerForm.querySelector('.add-loading');
+            addPeerForm.addEventListener('submit', function(event) {
+                event.preventDefault(); // Prevent default form submission behavior
+                showLoadingAnimation(addButton, addLoadingDiv);
+                setTimeout(function() {
+                    addPeerForm.submit(); // Submit the form after the loading animation finishes
+                }, 5000);
+            });
+            function showLoadingAnimation(button, loadingDiv) {
+                button.style.display = 'none';
+                loadingDiv.style.display = 'flex';
+                setTimeout(function() {
+                    loadingDiv.style.display = 'none';
+                    button.style.display = 'inline-block';
+                }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
+            }
+
+            document.querySelectorAll('.qr-code form').forEach(form => {
+                form.addEventListener('submit', function(event) {
+                    const removeButton = event.target.querySelector('.remove-button');
+                    const loadingDiv = event.target.querySelector('.remove-loading');
+                    showLoadingAnimation(removeButton, loadingDiv);
+                });
+            });
 
           </script>
     </body>

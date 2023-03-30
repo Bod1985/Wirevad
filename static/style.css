@@ -101,7 +101,7 @@ button, button a {
   position: relative;
 }
 
-#add-peer-loading {
+.remove-loading, .add-loading {
   display: none;
   justify-content: center;
   align-items: center;
