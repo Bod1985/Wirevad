@@ -39,11 +39,20 @@
             {% endwith %}
         
         <div class="buttons">
-            <form action="{{ url_for('add_peer') }}" method="post">
-                <button type="submit">Add Peer</button>
-            </form>
+            <div class="add-peer-container">
+                <form id="add-peer-form" action="{{ url_for('add_peer') }}" method="post">
+                    <button type="submit" onclick="showLoadingAnimation()">Add Peer</button>
+                </form>
+                <div id="add-peer-loading">
+                    <div class="circle"></div>
+                    <div class="circle"></div>
+                    <div class="circle"></div>
+                    <div class="circle"></div>
+                </div>                  
+            </div>
         </div>
-        
+          
+                   
         <div class="qr-codes">
             {% for qr in qr_codes %}
                 <div class="qr-code">
@@ -84,6 +93,17 @@
             checkConnection(); // Initial check on page load
 
             setInterval(checkConnection, 5000); // Check every 5 seconds
+
+            function showLoadingAnimation() {
+                var loadingAnimation = document.getElementById('add-peer-loading');
+                var addPeerForm = document.getElementById('add-peer-form');
+                addPeerForm.style.display = 'none';
+                loadingAnimation.style.display = 'flex';
+                setTimeout(function() {
+                    loadingAnimation.style.display = 'none';
+                }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
+            }
+
           </script>
     </body>
   </html>
