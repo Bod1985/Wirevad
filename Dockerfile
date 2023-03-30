@@ -2,7 +2,9 @@ FROM debian
 
 WORKDIR /app
 
-ADD server.py /app
+ADD server.py /app && \
+  ADD templates /app/templates && \
+  ADD static /app/static
 
 RUN \
   echo "**** install dependencies ****" && \
