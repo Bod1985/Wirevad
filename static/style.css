@@ -1,0 +1,97 @@
+body {
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #1c1c1e;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  margin: 15px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.flash {
+  text-align: center;
+  background-color: #4caf50;
+  color: white;
+  padding: 15px;
+  margin: 20px;
+  border-radius: 10px;
+}
+
+.qr-codes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0;
+  padding: 20px;
+}
+
+.qr-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px;
+  padding: 20px;
+  background-color: #2C2C2E;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.qr-code img {
+  width: 200px;
+  height: 200px;
+  margin-bottom: 10px;
+}
+
+.buttons { 
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 20px;
+}
+button, button a {
+  background-color: #2277e6;
+  border: none;
+  color: white;
+  text-align: center;
+  text-decoration: none !important;
+  font-size: 25px;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 10px 10px;
+  margin: 10px auto;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+#mullvad-client-status,
+#mullvad-status {
+  margin: 20px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.connected {
+  color: green;
+}
+
+.not-connected {
+  color: red;
+}
+
+.remove-button {
+  font-size: 14px;
+  padding: 5px 10px;
+  background-color: rgb(155, 15, 15);
+  color: white;
+}
+

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wirevad</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" sizes="16x16" href="/static/static/favicons/favicon-16.png">
+    <link rel="icon" sizes="32x32" href="/static/favicons/favicon-32.png">
+    <link rel="icon" sizes="64x64" href="/static/static/favicons/favicon-64.png">
+    <link rel="icon" sizes="128x128" href="/static/favicons/favicon-128.png">
+    <link rel="icon" sizes="192x192" href="/static/favicons/favicon-192.png">
+    <link rel="icon" sizes="256x256" href="/static/favicons/favicon-256.png">
+    <link rel="icon" sizes="512x512" href="/static/favicons/favicon-512.png">
+    <link rel="apple-touch-icon" sizes="57x57" href="/static/favicons/apple-touch-icon-57.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/static/favicons/apple-touch-icon-72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/static/favicons/apple-touch-icon-76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/static/favicons/apple-touch-icon-114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/static/favicons/apple-touch-icon-120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/static/favicons/apple-touch-icon-144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/favicons/apple-touch-icon-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicons/apple-touch-icon-180.png">
+</head>
+    <body>
+        <div id="mullvad-client-status" class="status"></div>
+        <div id="mullvad-status" class="{% if connected %}connected{% else %}not-connected{% endif %}">
+            {% if connected %}
+                Wirevad is connected to Mullvad
+            {% else %}
+                Wirevas is not connected to Mullvad
+            {% endif %}
+        </div>
+        
+        <h1>QR Codes for WireGuard Peers</h1>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            {% for message in messages %}
+        <div class="flash">{{ message }}</div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        
+        <div class="buttons">
+            <form action="{{ url_for('add_peer') }}" method="post">
+                <button type="submit">Add Peer</button>
+            </form>
+        </div>
+        
+        <div class="qr-codes">
+            {% for qr in qr_codes %}
+                <div class="qr-code">
+                    <h3>{{ qr.name }}</h3>
+                    <img src="{{ url_for('static', filename=qr.image) }}" alt="{{ qr.name }} QR Code" />
+                    <a href="{{ qr.link }}" download="{{ qr.name }}" class="download-link">
+                        <button type="button">Download</button>
+                    </a>
+                    <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', ''))[-1]|int) }}" method="post">
+                        <button type="submit" class="remove-button">Remove</button>
+                    </form>          
+                </div>
+            {% endfor %}
+        </div>
+        <script>
+            const statusDiv = document.getElementById('mullvad-client-status');
+
+            function checkConnection() {
+                fetch('https://am.i.mullvad.net/json')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.mullvad_exit_ip === true) {
+                        statusDiv.innerText = 'Your device is connected to Mullvad';
+                        statusDiv.classList.remove('not-connected'); // Remove not-connected class
+                        statusDiv.classList.add('connected'); // Add connected class
+                    } else {
+                        statusDiv.innerText = 'Your device is not connected to Mullvad';
+                        statusDiv.classList.remove('connected'); // Remove connected class
+                        statusDiv.classList.add('not-connected'); // Add not-connected class
+                    }
+                })
+                .catch(error => {
+                    statusDiv.innerText = 'Error checking your device Mullvad status';
+                    console.error(error);
+                });
+            }
+
+            checkConnection(); // Initial check on page load
+
+            setInterval(checkConnection, 5000); // Check every 5 seconds
+          </script>
+    </body>
+  </html>
