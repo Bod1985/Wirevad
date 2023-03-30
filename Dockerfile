@@ -3,8 +3,8 @@ FROM debian
 WORKDIR /app
 
 ADD server.py /app
-ADD templates /opt/wirevad/templates
-ADD static /opt/wirevad/static
+ADD templates /app/templates
+ADD static /app/static
 
 RUN \
   echo "**** install dependencies ****" && \
