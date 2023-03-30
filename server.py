@@ -144,7 +144,8 @@ PreDown = iptables -t nat -D POSTROUTING -o wirevadmullvad -j MASQUERADE
 
       with open('/opt/wirevad/wirevadhost.conf', 'a') as f:
         peer_config = \
-f"""[Peer]
+f"""# Client {i}
+[Peer]
 PublicKey = {public_key}
 AllowedIPs = {allowed_ip}
 
@@ -169,29 +170,27 @@ Endpoint = {DOMAIN}:{PORT}
     os.system("rm -f /opt/wirevad/privatekey_*")
     subprocess.run(['chmod', '-R', '777', '/opt/wirevad'])
 
+
 def wg_addpeers(num_of_peers):
   """Add additional peers to an existing WireGuard configuration."""
   FILE = "/opt/wirevad/wirevadhost.conf"
   if not os.path.isfile(FILE):
-      print("Error: " + FILE + " does not exist.")
-      return
+    print("Error: " + FILE + " does not exist.")
+    return
 
   with open(FILE) as f:
       conf = f.read()
 
-  peer_sections = conf.split("[Peer]")
+  peer_sections = conf.split("# Client ")
   last_peer = 0
-  if len(peer_sections) > 1:
-    for section in reversed(peer_sections):
-      lines = section.strip().split("\n")
-      for line in lines:
-        if line.startswith("AllowedIPs = "):
-          ip_part = line.split(" = ")[-1].split(".")[3].split("/")[0]
-          if ip_part.isdigit():
-            last_peer = int(ip_part)
-            break
-      if last_peer > 0:
-          break
+  for section in reversed(peer_sections):
+    section_lines = section.strip().split('\n')
+    if len(section_lines) >= 2:
+      peer_index = section_lines[0].split()[-1]
+      if peer_index.isdigit():
+        last_peer = int(peer_index)
+        break
+
   private_key = os.popen('wg genkey').read().strip()
   with open('privatekey_client', 'w') as f:
     f.write(private_key)
@@ -203,20 +202,22 @@ def wg_addpeers(num_of_peers):
   for i in range(last_peer + 1, last_peer + int(num_of_peers) + 1):
     private_key = os.popen('wg genkey').read().strip()
     with open(f'privatekey_client{i}', 'w') as f:
-        f.write(private_key)
+      f.write(private_key)
     public_key = os.popen(f'wg pubkey < privatekey_client{i}').read().strip()
     with open(f'publickey_client{i}', 'w') as f:
-        f.write(public_key)
+      f.write(public_key)
 
-    allowed_ip = f'10.10.12.{i}/32'
-    ip = f'10.10.12.{i}/24'
-    file_path = f'/opt/wirevad/wirevadclient{i-1}.conf'
+    allowed_ip = f'10.10.12.{i+1}/32'
+    ip = f'10.10.12.{i+1}/24'
+    file_path = f'/opt/wirevad/wirevadclient{i}.conf'
 
     with open(FILE, 'a') as f:
       peer_config = \
-f"""[Peer]
+f"""# Client {i}
+[Peer]
 PublicKey = {public_key}
 AllowedIPs = {allowed_ip}
+
 """
       f.write(peer_config)
 
@@ -250,41 +251,40 @@ def wg_removepeer(peer_index):
   with open(FILE) as f:
     conf = f.read()
 
-  peer_sections = conf.strip().split("[Peer]")
-  if len(peer_sections) < peer_index + 1:
-    print(f"Error: peer index {peer_index} is out of range.")
-    return
-
-  peer_config = peer_sections[peer_index].strip()
-  peer_lines = peer_config.split("\n")
-  public_key = None
-  for line in peer_lines:
-    if line.startswith("PublicKey = "):
-      public_key = line.split(" = ")[1]
+  peer_sections = conf.strip().split("# Client ")
+  peer_to_remove = None
+  for i, section in enumerate(peer_sections):
+    if section.strip().startswith(str(peer_index)):
+      peer_to_remove = section.strip()
       break
-  if public_key is None:
-    print(f"Error: could not find public key for peer {peer_index}.")
+
+  if peer_to_remove is None:
+    print(f"Error: peer index {peer_index} not found.")
     return
 
-  os.system(f"rm -f /opt/wirevad/privatekey_{public_key}.key")
+  # Find the start and end of the peer section
+  start = conf.find(f"# Client {peer_index}")
+  end = conf.find("# Client ", start + 1)
+  if end == -1:
+    end = len(conf)
+
+  # Remove the peer section from the configuration file
+  updated_conf = conf[:start] + conf[end:]
+
+  # Remove any leftover empty lines
+  updated_conf = "\n".join([line for line in updated_conf.split("\n") if line.strip()])
+
   os.system(f"rm -f /opt/wirevad/wirevadclient{peer_index}.conf")
   os.system(f"rm -f /app/static/wirevadclient{peer_index}.conf.png")
   with open(FILE, 'w') as f:
-    for i, section in enumerate(peer_sections):
-      if i != peer_index:
-        if i == 0:
-          # If this is the first peer section, don't include the [Peer] line
-          f.write(section.strip() + "\n")
-        else:
-          # Otherwise, include the [Peer] line
-          f.write("[Peer]\n" + section.strip() + "\n")
+    f.write(updated_conf + "\n")
 
   wg_down('wirevadhost')
   time.sleep(1)
   wg_up('wirevadhost')
   subprocess.run(['chmod', '-R', '777', '/opt/wirevad'])
-  print(f"Removed peer {peer_index} with public key {public_key} from {FILE}.")
-
+  print(f"Removed peer {peer_index} from {FILE}.")
+  
 def check_mullvad():
   global connected
   try:
@@ -312,7 +312,7 @@ def index():
             data_uri = base64.b64encode(f.read()).decode('utf-8')
             download_link = f"data:application/octet-stream;base64,{data_uri}"
           qr_codes.append({'name': file_name, 'image': image_name, 'link': download_link})
-    qr_codes.sort(key=lambda x: x['name'])
+    qr_codes.sort(key=lambda x: int(x['name'][len('wirevadclient'):].split('.')[0]))
 
     # Perform Mullvad check
     try:
