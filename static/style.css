@@ -141,3 +141,41 @@ button, button a {
     opacity: 0;
   }
 }
+.tab-container {
+  margin: 0;
+  padding: 0;
+}
+
+.tab-links {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+.tab-link {
+  margin: 0;
+  padding: 10px 20px;
+  background-color: #2C2C2E;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  text-decoration: none;
+  border-radius: 10px 10px 0 0;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.tab-link.active {
+  background-color: #f0f0f0;
+  border-color: #ccc;
+  color: #333;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+.tab-pane {
+  display: none;
+  margin-top: -19px;
+}

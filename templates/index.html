@@ -53,89 +53,127 @@
         </div>
           
                    
-        <div class="qr-codes">
+        <div class="tab-container">
+            <div class="tab-links">
+                {% for qr in qr_codes %}
+                  <a href="#{{ qr.name }}" class="tab-link">{{ qr.name }}</a>
+                {% endfor %}
+             </div>
+              
+            
             {% for qr in qr_codes %}
+              <div class="tab-pane" id="{{ qr.name }}">
                 <div class="qr-code">
-                    <h3>{{ qr.name }}</h3>
-                    <img src="{{ url_for('static', filename=qr.image) }}" alt="{{ qr.name }} QR Code" />
-                    <a href="{{ qr.link }}" download="{{ qr.name }}" class="download-link">
-                        <button type="button">Download</button>
-                    </a>
-                    <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', '')|replace('wirevadclient',''))|int) }}" method="post">
-                        <button type="submit" class="remove-button">Remove</button>
-                        <div class="remove-loading">
-                            <div class="circle"></div>
-                            <div class="circle"></div>
-                            <div class="circle"></div>
-                            <div class="circle"></div>
-                        </div>
-                    </form>      
+                  <h3>{{ qr.name }}</h3>
+                  <img src="{{ url_for('static', filename=qr.image) }}" alt="{{ qr.name }} QR Code" />
+                  <a href="{{ qr.link }}" download="{{ qr.name }}" class="download-link">
+                    <button type="button">Download</button>
+                  </a>
+                  <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', '')|replace('wirevadclient',''))|int) }}" method="post">
+                    <button type="submit" class="remove-button">Remove</button>
+                    <div class="remove-loading">
+                      <div class="circle"></div>
+                      <div class="circle"></div>
+                      <div class="circle"></div>
+                      <div class="circle"></div>
+                    </div>
+                  </form>
                 </div>
+              </div>
             {% endfor %}
         </div>
         <script>
-            const statusDiv = document.getElementById('mullvad-client-status');
+            document.addEventListener('DOMContentLoaded', function() {
 
-            function checkConnection() {
-                fetch('https://am.i.mullvad.net/json')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.mullvad_exit_ip === true) {
-                        statusDiv.innerText = 'Your device is connected to Mullvad';
-                        statusDiv.classList.remove('not-connected'); // Remove not-connected class
-                        statusDiv.classList.add('connected'); // Add connected class
-                    } else {
-                        statusDiv.innerText = 'Your device is not connected to Mullvad';
-                        statusDiv.classList.remove('connected'); // Remove connected class
-                        statusDiv.classList.add('not-connected'); // Add not-connected class
-                    }
-                })
-                .catch(error => {
-                    statusDiv.innerText = 'Error checking your device Mullvad status';
-                    console.error(error);
+                // Select default tab on page load
+                const defaultTab = document.querySelector('.tab-links .tab-link:first-of-type');
+                defaultTab.classList.add('active');
+
+                const defaultPane = document.getElementById(defaultTab.getAttribute('href').substring(1));
+                defaultPane.classList.add('active');
+
+                // Add event listener to each tab link
+                document.querySelectorAll('.tab-links .tab-link').forEach(link => {
+                    link.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        const currentLink = event.currentTarget;
+                        const currentPane = document.getElementById(currentLink.getAttribute('href').substring(1));
+
+                        // Remove active class from all tab links and panes
+                        document.querySelectorAll('.tab-links .tab-link').forEach(link => {
+                            link.classList.remove('active');
+                        });
+                        document.querySelectorAll('.tab-pane').forEach(pane => {
+                            pane.classList.remove('active');
+                        });
+
+                        // Add active class to current tab link and pane
+                        currentLink.classList.add('active');
+                        currentPane.classList.add('active');
+                    });
                 });
-            }
+                const statusDiv = document.getElementById('mullvad-client-status');
 
-            checkConnection(); // Initial check on page load
+                function checkConnection() {
+                    fetch('https://am.i.mullvad.net/json')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.mullvad_exit_ip === true) {
+                            statusDiv.innerText = 'Your device is connected to Mullvad';
+                            statusDiv.classList.remove('not-connected'); // Remove not-connected class
+                            statusDiv.classList.add('connected'); // Add connected class
+                        } else {
+                            statusDiv.innerText = 'Your device is not connected to Mullvad';
+                            statusDiv.classList.remove('connected'); // Remove connected class
+                            statusDiv.classList.add('not-connected'); // Add not-connected class
+                        }
+                    })
+                    .catch(error => {
+                        statusDiv.innerText = 'Error checking your device Mullvad status';
+                        console.error(error);
+                    });
+                }
 
-            setInterval(checkConnection, 5000); // Check every 5 seconds
-            
-            function showLoadingAnimation(button, loadingDiv) {
-                button.style.display = 'none';
-                loadingDiv.style.display = 'flex';
-                setTimeout(function() {
-                    loadingDiv.style.display = 'none';
-                    button.style.display = 'inline-block';
-                }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
-            }
+                checkConnection(); // Initial check on page load
 
-            const addPeerForm = document.getElementById('add-peer-form');
-            const addButton = addPeerForm.querySelector('button');
-            const addLoadingDiv = addPeerForm.querySelector('.add-loading');
-            addPeerForm.addEventListener('submit', function(event) {
-                event.preventDefault(); // Prevent default form submission behavior
-                showLoadingAnimation(addButton, addLoadingDiv);
-                setTimeout(function() {
-                    addPeerForm.submit(); // Submit the form after the loading animation finishes
-                }, 5000);
-            });
-            function showLoadingAnimation(button, loadingDiv) {
-                button.style.display = 'none';
-                loadingDiv.style.display = 'flex';
-                setTimeout(function() {
-                    loadingDiv.style.display = 'none';
-                    button.style.display = 'inline-block';
-                }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
-            }
+                setInterval(checkConnection, 5000); // Check every 5 seconds
+                
+                function showLoadingAnimation(button, loadingDiv) {
+                    button.style.display = 'none';
+                    loadingDiv.style.display = 'flex';
+                    setTimeout(function() {
+                        loadingDiv.style.display = 'none';
+                        button.style.display = 'inline-block';
+                    }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
+                }
 
-            document.querySelectorAll('.qr-code form').forEach(form => {
-                form.addEventListener('submit', function(event) {
-                    const removeButton = event.target.querySelector('.remove-button');
-                    const loadingDiv = event.target.querySelector('.remove-loading');
-                    showLoadingAnimation(removeButton, loadingDiv);
+                const addPeerForm = document.getElementById('add-peer-form');
+                const addButton = addPeerForm.querySelector('button');
+                const addLoadingDiv = addPeerForm.querySelector('.add-loading');
+                addPeerForm.addEventListener('submit', function(event) {
+                    event.preventDefault(); // Prevent default form submission behavior
+                    showLoadingAnimation(addButton, addLoadingDiv);
+                    setTimeout(function() {
+                        addPeerForm.submit(); // Submit the form after the loading animation finishes
+                    }, 5000);
+                });
+                function showLoadingAnimation(button, loadingDiv) {
+                    button.style.display = 'none';
+                    loadingDiv.style.display = 'flex';
+                    setTimeout(function() {
+                        loadingDiv.style.display = 'none';
+                        button.style.display = 'inline-block';
+                    }, 5000); // Set the timeout to the same amount of time it takes for the page to reload
+                }
+
+                document.querySelectorAll('.qr-code form').forEach(form => {
+                    form.addEventListener('submit', function(event) {
+                        const removeButton = event.target.querySelector('.remove-button');
+                        const loadingDiv = event.target.querySelector('.remove-loading');
+                        showLoadingAnimation(removeButton, loadingDiv);
+                    });
                 });
             });
-
           </script>
     </body>
   </html>
