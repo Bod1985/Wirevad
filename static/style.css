@@ -142,26 +142,28 @@ button, button a {
   }
 }
 .tab-container {
-  margin: 0;
-  padding: 0;
+  display: flex;
+  flex-direction: row; /* Change to row */
+  padding: 15px;
+  align-items: center;
 }
 
 .tab-links {
   display: flex;
-  justify-content: center;
+  flex-direction: column; /* Change to column */
   margin: 0;
-  padding: 0;
 }
 
 .tab-link {
   margin: 0;
-  padding: 10px 20px;
+  padding: 15px 20px;
+  margin-bottom: 2px;
   background-color: #2C2C2E;
   color: white;
   font-size: 18px;
   font-weight: bold;
   text-decoration: none;
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px 10px 10px 10px; /* Change border radius */
   transition: background-color 0.2s ease-in-out;
 }
 
@@ -171,11 +173,11 @@ button, button a {
   color: #333;
 }
 
-.tab-pane.active {
-  display: block;
-}
-
 .tab-pane {
   display: none;
-  margin-top: -19px;
+}
+
+.tab-pane.active {
+  display: block;
+  width: 100%;
 }
