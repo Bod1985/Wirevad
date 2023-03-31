@@ -328,14 +328,14 @@ def index():
 @app.route('/add_peer', methods=['POST'])
 def add_peer():
   wg_addpeers(1)
-  flash('New peer added successfully!', duration=10)
+  flash('New peer added successfully!')
   return redirect(url_for('index'))
 
 @app.route('/remove_peer/<int:peer_index>', methods=['POST'])
 def remove_peer(peer_index):
   """Remove a peer from the WireGuard configuration by its index."""
   wg_removepeer(peer_index)
-  flash('Peer removed successfully!', duration=10)
+  flash('Peer removed successfully!')
   return redirect(url_for('index'))
 
 @app.route('/download/<path:file_path>')
