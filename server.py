@@ -109,11 +109,23 @@ def peer_indexes(conf):
   """Return the client indexes present in a host config."""
   return [int(n) for n in re.findall(r'(?m)^# Client (\d+)\s*$', conf)]
 
+# Lets replies to connections made into the container (e.g. the web UI via Docker's
+# gateway) back out through the kill switch. New outbound traffic still has to use Mullvad.
+KILLSWITCH_REPLY_RULES = f"""PostUp  = iptables -I OUTPUT -o {INTERFACE} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+PreDown = iptables -D OUTPUT -o {INTERFACE} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+"""
+
 def wg_createmullvad():
   """Create Mullvad WireGuard configuration."""
   FILE = f'{CONFIG_DIR}/wirevadmullvad.conf'
   if os.path.isfile(FILE):
     print(f'{FILE} exists. Skipping creation of new keys & config.')
+    with open(FILE) as f:
+      conf = f.read()
+    if 'ctstate ESTABLISHED,RELATED' not in conf and '\n\n[Peer]' in conf:
+      print(f'Adding kill switch reply rules to {FILE}.')
+      with open(FILE, 'w') as f:
+        f.write(conf.replace('\n\n[Peer]', '\n' + KILLSWITCH_REPLY_RULES + '\n[Peer]', 1))
   else:
     print(f'{FILE} does not exist. Creating new keys & config.')
     with open(FILE, 'w') as f:
@@ -130,7 +142,7 @@ PostUp  = iptables -I OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-
 PreDown = iptables -D OUTPUT ! -o %i -m mark ! --mark 51820 -m addrtype ! --dst-type LOCAL -j REJECT
 PostUp =  ip route add {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -I OUTPUT -d {LAN_SUBNET} -j ACCEPT
 PreDown = ip route del {LAN_SUBNET} via $(ip route | grep default | awk '{{print $3}}'); iptables -D OUTPUT -d {LAN_SUBNET} -j ACCEPT
-
+{KILLSWITCH_REPLY_RULES}
 [Peer]
 PublicKey = {MULLVAD_PUBLICKEY}
 AllowedIPs = 0.0.0.0/0
