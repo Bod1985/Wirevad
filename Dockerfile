@@ -1,4 +1,4 @@
-FROM debian
+FROM alpine:3.24
 
 WORKDIR /app
 
@@ -8,13 +8,10 @@ ADD static /app/static
 
 RUN \
   echo "**** install dependencies ****" && \
-  apt-get update && \
-  apt-get install -y --no-install-recommends wireguard-tools iproute2 openresolv sudo curl iptables ca-certificates procps iputils-ping net-tools python3 pip && \
-  pip install qrcode flask requests schedule
+  apk add --no-cache wireguard-tools iproute2 iptables openresolv bash curl ca-certificates \
+    python3 py3-flask py3-qrcode py3-pillow py3-requests py3-schedule
 
-RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
-
-EXPOSE 51822
+EXPOSE 51820/udp
 EXPOSE 8000
 
 CMD ["python3", "-u", "server.py"]

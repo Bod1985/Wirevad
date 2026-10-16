@@ -58,7 +58,8 @@ def wg_down(interface):
 def wg_up(interface):
   """Bring up the WireGuard interface."""
   if interface == 'wirevadmullvad':
-    subprocess.run(['sysctl', '-p'])
+    # Let VPN clients' traffic be forwarded on to Mullvad and the LAN
+    subprocess.run(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
     subprocess.run(['cp', f'{CONFIG_DIR}/wirevadmullvad.conf', '/etc/wireguard/wirevadmullvad.conf'])
     subprocess.run(['wg-quick', 'up', interface])
     result = subprocess.run(['curl', 'https://am.i.mullvad.net/connected'], capture_output=True)
@@ -158,7 +159,6 @@ def wg_createhost(num_of_clients):
     # Client configs from a previous server key are useless now, so clear them out
     for path in glob.glob(f'{CONFIG_DIR}/wirevadclient*.conf'):
       os.remove(path)
-    os.system("sed -i 's/#net.ipv4.ip_forward=/net.ipv4.ip_forward=/' /etc/sysctl.conf")
     SERVER_PRIVATE, SERVER_PUBLIC = gen_keypair()
 
     with open(f'{CONFIG_DIR}/publickey_server', 'w') as f:
@@ -290,7 +290,7 @@ def index():
 
         # Render the QR code in memory so client keys never land in the public static folder
         image = io.BytesIO()
-        qrcode.make(config_data).save(image, format='PNG')
+        qrcode.make(config_data).save(image)
         image_uri = 'data:image/png;base64,' + base64.b64encode(image.getvalue()).decode('utf-8')
         download_link = 'data:application/octet-stream;base64,' + base64.b64encode(config_data).decode('utf-8')
         qr_codes.append({'name': file_name, 'image': image_uri, 'link': download_link})
