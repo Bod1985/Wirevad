@@ -37,6 +37,11 @@ WEB_PASSWORD = os.environ.get('WEB_PASSWORD')
 PUID = int(os.environ.get('PUID') or -1)
 PGID = int(os.environ.get('PGID') or -1)
 
+# Largest TCP segment VPN clients' connections may use. 1240 fits a 1280-byte
+# packet, which survives both WireGuard hops even on lines below 1500 (e.g. PPPoE).
+# Set to 0 to disable clamping.
+MSS = int(os.environ.get('MSS') or 1240)
+
 CONFIG_DIR = '/opt/wirevad'
 HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
 
@@ -342,6 +347,19 @@ def run_flask_app():
   app.run(host='0.0.0.0', port=8000)
 
 
+def clamp_mss():
+  """Stop VPN clients' TCP connections from using packets too big for the double tunnel.
+
+  Lowers (never raises) the MSS advertised in forwarded SYN packets. Added once per
+  container start; the rule isn't tied to either WireGuard interface, so restarting
+  wirevadhost when peers change leaves it in place.
+  """
+  if MSS <= 0:
+    return
+  subprocess.run(['iptables', '-t', 'mangle', '-A', 'FORWARD', '-p', 'tcp', '--tcp-flags', 'SYN,RST', 'SYN',
+                  '-m', 'tcpmss', '--mss', f'{MSS + 1}:65535', '-j', 'TCPMSS', '--set-mss', str(MSS)])
+  print(f'Clamping VPN client TCP MSS to {MSS}.')
+
 def main():
   """Main function to execute the script."""
   global WEB_PASSWORD
@@ -355,6 +373,7 @@ def main():
   wg_createhost(NUMBER_OF_CLIENTS)
   wg_up('wirevadmullvad')
   wg_up('wirevadhost')
+  clamp_mss()
 
 
 if __name__ == '__main__':

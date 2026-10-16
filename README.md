@@ -44,6 +44,7 @@ services:
       - WEB_PASSWORD= #Password for the WebUI. If left empty, a random one is generated on each start and printed in the container logs
       - PUID=1000 #Host user ID that should own /opt/wirevad (run: id -u). Leave empty to keep the files root-only
       - PGID=1000 #Host group ID that should own /opt/wirevad (run: id -g)
+      - MSS=1240 #Max TCP segment size for VPN clients. The default avoids slow/stalling connections on lines with a reduced MTU (e.g. PPPoE). 0 disables
     cap_add:
       - NET_ADMIN
       - SYS_MODULE

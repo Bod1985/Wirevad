@@ -19,6 +19,7 @@ services:
       - WEB_PASSWORD=
       - PUID=
       - PGID=
+      - MSS=1240
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
