@@ -42,6 +42,8 @@ services:
       - NUMBER_OF_CLIENTS=1 #How many client configs (peers) you would like creating
       - WEB_USERNAME=admin #Username for the WebUI
       - WEB_PASSWORD= #Password for the WebUI. If left empty, a random one is generated on each start and printed in the container logs
+      - PUID=1000 #Host user ID that should own /opt/wirevad (run: id -u). Leave empty to keep the files root-only
+      - PGID=1000 #Host group ID that should own /opt/wirevad (run: id -g)
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -60,4 +62,4 @@ Run ```docker-compose up -d```
 
 The WebUI is available on port 8000 and asks for the `WEB_USERNAME`/`WEB_PASSWORD` login. It shows every client's private key, so don't expose port 8000 to the internet.
 
-The files in `/opt/wirevad` contain private keys and are readable by root only, so use `sudo` to read them on the host.
+The files in `/opt/wirevad` contain private keys, so only their owner can read them. Set `PUID`/`PGID` to your host user's IDs to read them without `sudo`; otherwise they're owned by root.

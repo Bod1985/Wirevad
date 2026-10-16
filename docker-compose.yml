@@ -17,6 +17,8 @@ services:
       - NUMBER_OF_CLIENTS=1
       - WEB_USERNAME=admin
       - WEB_PASSWORD=
+      - PUID=
+      - PGID=
     cap_add:
       - NET_ADMIN
       - SYS_MODULE

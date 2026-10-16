@@ -32,6 +32,11 @@ DOMAIN = os.environ.get('DOMAIN')
 WEB_USERNAME = os.environ.get('WEB_USERNAME') or 'admin'
 WEB_PASSWORD = os.environ.get('WEB_PASSWORD')
 
+# Host user/group to own /opt/wirevad, so the configs can be read without sudo.
+# -1 leaves the owner unchanged (root).
+PUID = int(os.environ.get('PUID') or -1)
+PGID = int(os.environ.get('PGID') or -1)
+
 CONFIG_DIR = '/opt/wirevad'
 HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
 
@@ -69,9 +74,12 @@ def wg_up(interface):
     subprocess.run(['wg-quick', 'up', interface])
 
 def lock_down_config_dir():
-  """Make the config directory and the keys inside it readable by root only."""
+  """Make the config directory and the keys inside it readable by their owner only
+  (PUID/PGID if set, otherwise root)."""
+  os.chown(CONFIG_DIR, PUID, PGID)
   os.chmod(CONFIG_DIR, 0o700)
   for path in glob.glob(f'{CONFIG_DIR}/*'):
+    os.chown(path, PUID, PGID)
     os.chmod(path, 0o600)
 
 def gen_keypair():
