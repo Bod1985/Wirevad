@@ -15,6 +15,8 @@ services:
       - MULLVAD_PUBLICKEY=
       - MULLVAD_ENDPOINT=
       - NUMBER_OF_CLIENTS=1
+      - WEB_USERNAME=admin
+      - WEB_PASSWORD=
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
