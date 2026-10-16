@@ -84,7 +84,7 @@ def wg_up(interface):
     prepare_resolvconf()
     subprocess.run(['cp', f'{CONFIG_DIR}/wirevadmullvad.conf', '/etc/wireguard/wirevadmullvad.conf'])
     subprocess.run(['wg-quick', 'up', interface])
-    result = subprocess.run(['curl', 'https://am.i.mullvad.net/connected'], capture_output=True)
+    result = subprocess.run(['curl', '-sS', '-m', '15', 'https://am.i.mullvad.net/connected'], capture_output=True)
     print(result.stdout.decode())
   elif interface == 'wirevadhost':
     subprocess.run(['cp', HOST_CONF, '/etc/wireguard/wirevadhost.conf'])
