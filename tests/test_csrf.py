@@ -22,12 +22,6 @@ server.app.static_folder = os.path.join(ROOT, 'static')
 server.app.config['TESTING'] = True
 server.WEB_PASSWORD = 'secret'
 
-# Stand-in for routes added on other branches (e.g. /set_location): the check
-# applies to every POST, not just the routes that exist today.
-@server.app.route('/test_post', methods=['POST'])
-def test_post():
-  return 'ok'
-
 AUTH = {'Authorization': 'Basic ' + base64.b64encode(b'admin:secret').decode()}
 
 
@@ -41,6 +35,10 @@ class CsrfTest(unittest.TestCase):
       mock.patch.object(server, 'CONFIG_DIR', self.config_dir.name),
       mock.patch.object(server, 'wg_addpeers'),
       mock.patch.object(server, 'wg_removepeer', return_value=True),
+      mock.patch.object(server, 'switch_relay', return_value=True),
+      mock.patch.object(server, 'current_relay', return_value=None),
+      mock.patch.object(server, 'relays', [{'hostname': 'se-got-wg-001', 'country_name': 'Sweden',
+                                             'city_name': 'Gothenburg'}]),
     ]
     for p in patches:
       p.start()
@@ -52,12 +50,14 @@ class CsrfTest(unittest.TestCase):
     """Load the page like a browser would and return the token from its forms."""
     page = self.client.get('/', headers=AUTH).get_data(as_text=True)
     tokens = re.findall(r'name="csrf_token" value="([^"]+)"', page)
-    self.assertEqual(len(tokens), 2, 'expected a token in the add and remove forms')
+    self.assertEqual(len(tokens), 3, 'expected a token in the location, add and remove forms')
     self.assertEqual(len(set(tokens)), 1)
     return tokens[0]
 
   def post(self, url, token=None, headers=None):
-    data = {} if token is None else {'csrf_token': token}
+    data = {'relay': 'se-got-wg-001'}
+    if token is not None:
+      data['csrf_token'] = token
     return self.client.post(url, data=data, headers={**AUTH, **(headers or {})})
 
   def test_add_peer_with_token(self):
@@ -70,6 +70,11 @@ class CsrfTest(unittest.TestCase):
     self.assertEqual(response.status_code, 302)
     server.wg_removepeer.assert_called_once_with(1)
 
+  def test_set_location_with_token(self):
+    response = self.post('/set_location', self.get_token())
+    self.assertEqual(response.status_code, 302)
+    server.switch_relay.assert_called_once_with('se-got-wg-001')
+
   def test_same_origin_headers_accepted(self):
     token = self.get_token()
     self.assertEqual(self.post('/add_peer', token, {'Origin': 'http://localhost'}).status_code, 302)
@@ -77,19 +82,21 @@ class CsrfTest(unittest.TestCase):
 
   def test_missing_token_rejected(self):
     self.get_token()
-    for url in ('/add_peer', '/remove_peer/1', '/test_post'):
+    for url in ('/add_peer', '/remove_peer/1', '/set_location'):
       with self.subTest(url=url):
         self.assertEqual(self.post(url).status_code, 400)
     server.wg_addpeers.assert_not_called()
     server.wg_removepeer.assert_not_called()
+    server.switch_relay.assert_not_called()
 
   def test_wrong_token_rejected(self):
     self.get_token()
-    for url in ('/add_peer', '/remove_peer/1', '/test_post'):
+    for url in ('/add_peer', '/remove_peer/1', '/set_location'):
       with self.subTest(url=url):
         self.assertEqual(self.post(url, 'not-the-token').status_code, 400)
     server.wg_addpeers.assert_not_called()
     server.wg_removepeer.assert_not_called()
+    server.switch_relay.assert_not_called()
 
   def test_token_without_session_rejected(self):
     # A token from another session (e.g. one an attacker loaded) doesn't work here

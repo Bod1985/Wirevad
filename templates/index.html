@@ -33,6 +33,7 @@
 
         {% if countries %}
         <form class="location-picker" action="{{ url_for('set_location') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label for="relay">Mullvad location</label>
             <select id="relay" name="relay">
                 {% if not current %}
