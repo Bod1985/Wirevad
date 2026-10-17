@@ -41,6 +41,7 @@
         <div class="buttons">
             <div class="add-peer-container">
                 <form id="add-peer-form" action="{{ url_for('add_peer') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit">Add Peer</button>
                     <div class="add-loading">
                         <div class="circle"></div>
@@ -70,6 +71,7 @@
                     <button type="button">Download</button>
                   </a>
                   <form onsubmit="return confirm('Are you sure you want to remove this peer ({{qr.name}})?');" action="{{ url_for('remove_peer', peer_index=(qr.name|replace('.conf', '')|replace('wirevadclient',''))|int) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="remove-button">Remove</button>
                     <div class="remove-loading">
                       <div class="circle"></div>

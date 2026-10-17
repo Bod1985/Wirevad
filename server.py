@@ -12,7 +12,8 @@ import subprocess
 import threading
 import qrcode
 import base64
-from flask import Flask, render_template, request, flash, redirect, url_for, Response
+from urllib.parse import urlsplit
+from flask import Flask, render_template, request, session, flash, redirect, url_for, Response, abort
 import time, requests, schedule, glob
 
 MULLVAD_ADDRESS = os.environ.get('MULLVAD_ADDRESS')
@@ -47,6 +48,8 @@ HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
 
 app = Flask(__name__, template_folder='/app/templates', static_folder='/app/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+# Don't send the session (and its CSRF token) with POSTs from other sites
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Latest result of the background Mullvad check, shown on the web UI
 connected = False
@@ -309,6 +312,33 @@ def require_login():
      and hmac.compare_digest((auth.password or '').encode(), WEB_PASSWORD.encode()):
     return None
   return Response('Login required', 401, {'WWW-Authenticate': 'Basic realm="Wirevad"'})
+
+def csrf_token():
+  """Return this session's CSRF token, creating it on first use."""
+  if 'csrf_token' not in session:
+    session['csrf_token'] = secrets.token_urlsafe(32)
+  return session['csrf_token']
+
+app.jinja_env.globals['csrf_token'] = csrf_token
+
+@app.before_request
+def check_csrf():
+  """Reject POSTs that didn't come from our own pages.
+
+  Browsers resend Basic auth credentials with POSTs submitted from other sites, so
+  every form must carry the session's token, and the Origin (or Referer) header,
+  when sent, must point back at this host.
+  """
+  if request.method != 'POST':
+    return None
+  origin = request.headers.get('Origin') or request.headers.get('Referer')
+  if origin and urlsplit(origin).netloc != request.host:
+    abort(400, 'Cross-site request rejected.')
+  expected = session.get('csrf_token')
+  submitted = request.form.get('csrf_token', '')
+  if not expected or not hmac.compare_digest(submitted.encode(), expected.encode()):
+    abort(400, 'Missing or invalid CSRF token - reload the page and try again.')
+  return None
 
 @app.route('/')
 def index():
