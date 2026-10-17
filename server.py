@@ -8,6 +8,7 @@ import re
 import io
 import hmac
 import json
+import ipaddress
 import secrets
 import subprocess
 import threading
@@ -53,11 +54,16 @@ MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD')
 MQTT_TOPIC = os.environ.get('MQTT_TOPIC') or 'wirevad'
 MQTT_DISCOVERY_PREFIX = os.environ.get('MQTT_DISCOVERY_PREFIX') or 'homeassistant'
 
+# DNS server all VPN clients are forced to use, until changed on the web UI or over MQTT.
+# Leave empty to let clients use whatever DNS their config says.
+CLIENT_DNS = os.environ.get('CLIENT_DNS') or ''
+
 CONFIG_DIR = '/opt/wirevad'
 HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
 MULLVAD_CONF = f'{CONFIG_DIR}/wirevadmullvad.conf'
 RELAYS_CACHE = f'{CONFIG_DIR}/mullvad-relays.json'
 RELAYS_URL = 'https://api.mullvad.net/www/relays/wireguard/'
+SETTINGS_FILE = f'{CONFIG_DIR}/settings.json'
 
 app = Flask(__name__, template_folder='/app/templates', static_folder='/app/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
@@ -68,6 +74,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 connected = False
 # Active Mullvad WireGuard servers, for the location picker
 relays = []
+# DNS server VPN clients are currently forced to use ('' = not enforced)
+client_dns = ''
 relay_lock = threading.Lock()
 
 def wg_down(interface):
@@ -455,7 +463,24 @@ def index():
       countries.setdefault(relay['country_name'], []).append(relay)
 
     return render_template('index.html', qr_codes=qr_codes, connected=connected,
-                           countries=countries, current=current_relay())
+                           countries=countries, current=current_relay(),
+                           client_dns=client_dns, dns_presets=dns_presets())
+
+def dns_presets():
+  """Suggestions for the client DNS box."""
+  presets = [('10.64.0.1', 'Mullvad'), ('1.1.1.1', 'Cloudflare'), ('9.9.9.9', 'Quad9')]
+  if DNS_SERVER and valid_dns(DNS_SERVER):
+    presets.insert(0, (DNS_SERVER, 'LAN DNS'))
+  return presets
+
+@app.route('/set_client_dns', methods=['POST'])
+def set_client_dns_route():
+  server = request.form.get('client_dns', '').strip()
+  if set_client_dns(server):
+    flash(f'VPN clients now use DNS server {server}.' if server else 'VPN clients now use the DNS server from their own config.')
+  else:
+    flash(f'{server} is not a valid IPv4 address.')
+  return redirect(url_for('index'))
 
 @app.route('/set_location', methods=['POST'])
 def set_location():
@@ -491,6 +516,67 @@ def remove_peer(peer_index):
 def run_flask_app():
   app.run(host='0.0.0.0', port=8000)
 
+
+def load_settings():
+  """Settings changed at runtime (web UI / MQTT), kept across restarts."""
+  if not os.path.isfile(SETTINGS_FILE):
+    return {}
+  with open(SETTINGS_FILE) as f:
+    return json.load(f)
+
+def save_settings(**changes):
+  settings = load_settings()
+  settings.update(changes)
+  with open(SETTINGS_FILE, 'w') as f:
+    json.dump(settings, f)
+  lock_down_config_dir()
+
+def valid_dns(value):
+  """An IPv4 address, or '' for "don't enforce"."""
+  if value == '':
+    return True
+  try:
+    ipaddress.IPv4Address(value)
+    return True
+  except ValueError:
+    return False
+
+def iptables(*args):
+  return subprocess.run(['iptables', *args], capture_output=True, text=True)
+
+def apply_client_dns(server):
+  """Redirect all plain DNS from VPN clients to server ('' turns enforcement off).
+
+  Whatever DNS a client's config names, its port 53 queries are rewritten to go to
+  server. DNS-over-TLS/QUIC (port 853) is blocked while enforcing, so clients such as
+  Android's automatic Private DNS fall back to plain DNS rather than bypass it.
+  DNS-over-HTTPS can't be told apart from other HTTPS traffic, so it isn't affected.
+  """
+  global client_dns
+  for table, chain, hook in (('nat', 'WIREVAD_DNS', 'PREROUTING'), ('filter', 'WIREVAD_DNS_FWD', 'FORWARD')):
+    iptables('-t', table, '-N', chain)
+    iptables('-t', table, '-F', chain)
+    # The jump isn't tied to the interface's lifetime, so it survives wirevadhost restarts
+    if iptables('-t', table, '-C', hook, '-i', 'wirevadhost', '-j', chain).returncode != 0:
+      iptables('-t', table, '-I', hook, '-i', 'wirevadhost', '-j', chain)
+  if server:
+    for proto in ('udp', 'tcp'):
+      iptables('-t', 'nat', '-A', 'WIREVAD_DNS', '-p', proto, '--dport', '53', '-j', 'DNAT', '--to-destination', server)
+      iptables('-t', 'filter', '-A', 'WIREVAD_DNS_FWD', '-p', proto, '--dport', '853', '-j', 'REJECT')
+    print(f'Forcing VPN clients to use DNS server {server}.')
+  else:
+    print('VPN clients use the DNS server from their own config.')
+  client_dns = server
+
+def set_client_dns(server):
+  """Change the enforced client DNS server and remember it. Returns False if invalid."""
+  server = server.strip()
+  if not valid_dns(server):
+    return False
+  apply_client_dns(server)
+  save_settings(client_dns=server)
+  mqtt_publish_state()
+  return True
 
 def clamp_mss():
   """Stop VPN clients' TCP connections from using packets too big for the double tunnel.
@@ -620,6 +706,11 @@ def mqtt_publish_discovery():
                                'state_topic': f'{MQTT_TOPIC}/mullvad/server'}),
     ('sensor', 'exit_ip', {'name': 'Exit IP', 'icon': 'mdi:ip-network',
                            'state_topic': f'{MQTT_TOPIC}/mullvad/ip'}),
+    ('text', 'client_dns', {'name': 'Client DNS server', 'icon': 'mdi:dns',
+                            'state_topic': f'{MQTT_TOPIC}/client_dns',
+                            'command_topic': f'{MQTT_TOPIC}/client_dns/set',
+                            # An IPv4 address, or empty to stop enforcing
+                            'pattern': r'^((\d{1,3}\.){3}\d{1,3})?$', 'min': 0, 'max': 15}),
     ('sensor', 'clients_connected', {'name': 'Connected clients', 'icon': 'mdi:account-multiple',
                                      'state_class': 'measurement',
                                      'state_topic': f'{MQTT_TOPIC}/clients/connected'}),
@@ -646,6 +737,7 @@ def mqtt_publish_state():
   relay = current_relay()
   if relay:
     mqtt_publish(f'{MQTT_TOPIC}/location', relay_option(relay))
+  mqtt_publish(f'{MQTT_TOPIC}/client_dns', client_dns)
 
 def on_mqtt_connect(client, userdata, flags, rc):
   if rc != 0:
@@ -654,6 +746,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
   print(f'Connected to MQTT broker {MQTT_HOST}:{MQTT_PORT}.')
   client.publish(f'{MQTT_TOPIC}/status', 'online', retain=True)
   client.subscribe(f'{MQTT_TOPIC}/location/set')
+  client.subscribe(f'{MQTT_TOPIC}/client_dns/set')
   # Home Assistant announces itself here when it restarts; re-send discovery then
   client.subscribe(f'{MQTT_DISCOVERY_PREFIX}/status')
   mqtt_publish_discovery()
@@ -671,6 +764,11 @@ def on_mqtt_message(client, userdata, message):
     stale = re.fullmatch(rf'{re.escape(MQTT_DISCOVERY_PREFIX)}/\w+/wirevad/client_(\d+)(_\w+)?/config', message.topic)
     if stale and payload and announced_clients is not None and int(stale.group(1)) not in announced_clients:
       clear_client(int(stale.group(1)))
+    return
+  if message.topic == f'{MQTT_TOPIC}/client_dns/set':
+    if not set_client_dns(payload):
+      print(f'Ignoring invalid client DNS server from MQTT: {payload}')
+      mqtt_publish_state()
     return
   # Accept the selector's option text or a bare hostname (handy in automations)
   hostname = payload.split(' ', 1)[0]
@@ -719,6 +817,11 @@ def main():
   wg_up('wirevadmullvad')
   wg_up('wirevadhost')
   clamp_mss()
+  saved_dns = load_settings().get('client_dns', CLIENT_DNS)
+  if not valid_dns(saved_dns):
+    print(f'Ignoring invalid client DNS server: {saved_dns}')
+    saved_dns = ''
+  apply_client_dns(saved_dns)
   start_mqtt()
 
 

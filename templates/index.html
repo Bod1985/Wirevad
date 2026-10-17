@@ -53,6 +53,19 @@
         </form>
         {% endif %}
 
+        <form class="location-picker" action="{{ url_for('set_client_dns_route') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="client_dns">Client DNS</label>
+            <input id="client_dns" name="client_dns" list="dns-presets" value="{{ client_dns }}"
+                   placeholder="Not enforced" inputmode="decimal" autocomplete="off">
+            <datalist id="dns-presets">
+                {% for ip, label in dns_presets %}
+                <option value="{{ ip }}">{{ label }}</option>
+                {% endfor %}
+            </datalist>
+            <button type="submit">Save</button>
+        </form>
+
         <h1>QR Codes for WireGuard Peers</h1>
             {% with messages = get_flashed_messages() %}
             {% if messages %}

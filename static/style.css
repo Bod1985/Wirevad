@@ -97,7 +97,8 @@ button, button a {
   margin: 0 20px;
 }
 
-.location-picker select {
+.location-picker select,
+.location-picker input {
   max-width: 100%;
   font-size: 16px;
   padding: 10px;

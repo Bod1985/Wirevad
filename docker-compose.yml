@@ -20,6 +20,7 @@ services:
       - PUID=
       - PGID=
       - MSS=1240
+      - CLIENT_DNS=
       - MQTT_HOST=
       - MQTT_PORT=1883
       - MQTT_USERNAME=

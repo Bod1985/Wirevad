@@ -50,7 +50,7 @@ class CsrfTest(unittest.TestCase):
     """Load the page like a browser would and return the token from its forms."""
     page = self.client.get('/', headers=AUTH).get_data(as_text=True)
     tokens = re.findall(r'name="csrf_token" value="([^"]+)"', page)
-    self.assertEqual(len(tokens), 3, 'expected a token in the location, add and remove forms')
+    self.assertEqual(len(tokens), 4, 'expected a token in the location, client DNS, add and remove forms')
     self.assertEqual(len(set(tokens)), 1)
     return tokens[0]
 
