@@ -44,6 +44,14 @@ PGID = int(os.environ.get('PGID') or -1)
 # Set to 0 to disable clamping.
 MSS = int(os.environ.get('MSS') or 1240)
 
+# Optional MQTT connection for Home Assistant. Leave MQTT_HOST empty to disable.
+MQTT_HOST = os.environ.get('MQTT_HOST')
+MQTT_PORT = int(os.environ.get('MQTT_PORT') or 1883)
+MQTT_USERNAME = os.environ.get('MQTT_USERNAME')
+MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD')
+MQTT_TOPIC = os.environ.get('MQTT_TOPIC') or 'wirevad'
+MQTT_DISCOVERY_PREFIX = os.environ.get('MQTT_DISCOVERY_PREFIX') or 'homeassistant'
+
 CONFIG_DIR = '/opt/wirevad'
 HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
 MULLVAD_CONF = f'{CONFIG_DIR}/wirevadmullvad.conf'
@@ -301,6 +309,7 @@ def check_mullvad():
   except Exception as e:
     print(e)
     connected = False
+  mqtt_publish_state()
 
 def refresh_relays():
   """Fetch Mullvad's WireGuard server list, falling back to the copy saved last time."""
@@ -322,6 +331,8 @@ def refresh_relays():
     with open(RELAYS_CACHE) as f:
       fetched = json.load(f)
   relays = sorted(fetched, key=lambda r: (r['country_name'], r['city_name'], r['hostname']))
+  # The Home Assistant selector lists the servers, so re-announce it with the new list
+  mqtt_publish_discovery()
 
 def current_mullvad_peer():
   """Return the (public key, endpoint) of the Mullvad server in wirevadmullvad.conf."""
@@ -368,6 +379,7 @@ def switch_relay(hostname):
       f.write(interface + '[Peer]' + peer)
 
   print(f"Switched Mullvad server to {relay['hostname']} ({relay['city_name']}, {relay['country_name']}).")
+  mqtt_publish_state()
   # Give the new server a moment to connect before re-checking the status
   threading.Timer(3, check_mullvad).start()
   return True
@@ -489,6 +501,108 @@ def clamp_mss():
                   '-m', 'tcpmss', '--mss', f'{MSS + 1}:65535', '-j', 'TCPMSS', '--set-mss', str(MSS)])
   print(f'Clamping VPN client TCP MSS to {MSS}.')
 
+# --- Home Assistant over MQTT ---------------------------------------------------
+# Wirevad announces itself with MQTT discovery as one "Wirevad" device: a selector
+# for the Mullvad server, plus sensors for the connection, exit server and exit IP.
+
+mqtt_client = None
+
+DEVICE = {'identifiers': ['wirevad'], 'name': 'Wirevad', 'manufacturer': 'Wirevad', 'model': 'WireGuard + Mullvad'}
+
+def relay_option(relay):
+  """Selector option text for a server; it starts with the hostname so it can be parsed back."""
+  return f"{relay['hostname']} ({relay['city_name']}, {relay['country_name']})"
+
+def mqtt_publish(topic, payload, retain=True):
+  if mqtt_client is not None:
+    mqtt_client.publish(topic, payload if isinstance(payload, str) else json.dumps(payload), retain=retain)
+
+def mqtt_publish_discovery():
+  """Tell Home Assistant about Wirevad's entities."""
+  if mqtt_client is None:
+    return
+  common = {'device': DEVICE, 'availability_topic': f'{MQTT_TOPIC}/status'}
+  entities = [
+    ('binary_sensor', 'mullvad', {'name': 'Connected to Mullvad', 'device_class': 'connectivity',
+                                  'state_topic': f'{MQTT_TOPIC}/mullvad/connected'}),
+    ('sensor', 'exit_server', {'name': 'Exit server', 'icon': 'mdi:server-network',
+                               'state_topic': f'{MQTT_TOPIC}/mullvad/server'}),
+    ('sensor', 'exit_ip', {'name': 'Exit IP', 'icon': 'mdi:ip-network',
+                           'state_topic': f'{MQTT_TOPIC}/mullvad/ip'}),
+  ]
+  # The selector needs the server list, so it's only announced once that's loaded
+  if relays:
+    entities.append(('select', 'location', {'name': 'Mullvad location', 'icon': 'mdi:earth',
+                                            'state_topic': f'{MQTT_TOPIC}/location',
+                                            'command_topic': f'{MQTT_TOPIC}/location/set',
+                                            'options': [relay_option(r) for r in relays]}))
+  for component, key, config in entities:
+    config.update(common, unique_id=f'wirevad_{key}', object_id=f'wirevad_{key}')
+    mqtt_publish(f'{MQTT_DISCOVERY_PREFIX}/{component}/wirevad/{key}/config', config)
+  mqtt_publish_state()
+
+def mqtt_publish_state():
+  """Publish the current Mullvad server and connection status."""
+  if mqtt_client is None:
+    return
+  via_mullvad = bool(connected and connected.get('mullvad_exit_ip'))
+  mqtt_publish(f'{MQTT_TOPIC}/mullvad/connected', 'ON' if via_mullvad else 'OFF')
+  mqtt_publish(f'{MQTT_TOPIC}/mullvad/server', (connected and connected.get('mullvad_exit_ip_hostname')) or 'None')
+  mqtt_publish(f'{MQTT_TOPIC}/mullvad/ip', (connected and connected.get('ip')) or 'None')
+  relay = current_relay()
+  if relay:
+    mqtt_publish(f'{MQTT_TOPIC}/location', relay_option(relay))
+
+def on_mqtt_connect(client, userdata, flags, rc):
+  if rc != 0:
+    print(f'MQTT connection to {MQTT_HOST}:{MQTT_PORT} refused (code {rc}).')
+    return
+  print(f'Connected to MQTT broker {MQTT_HOST}:{MQTT_PORT}.')
+  client.publish(f'{MQTT_TOPIC}/status', 'online', retain=True)
+  client.subscribe(f'{MQTT_TOPIC}/location/set')
+  # Home Assistant announces itself here when it restarts; re-send discovery then
+  client.subscribe(f'{MQTT_DISCOVERY_PREFIX}/status')
+  mqtt_publish_discovery()
+
+def on_mqtt_message(client, userdata, message):
+  payload = message.payload.decode(errors='replace').strip()
+  if message.topic == f'{MQTT_DISCOVERY_PREFIX}/status':
+    if payload == 'online':
+      mqtt_publish_discovery()
+    return
+  # Accept the selector's option text or a bare hostname (handy in automations)
+  hostname = payload.split(' ', 1)[0]
+  try:
+    switched = switch_relay(hostname)
+  except subprocess.CalledProcessError as e:
+    print(f'Switching Mullvad server failed: {e}')
+    switched = False
+  if not switched:
+    print(f'Ignoring unknown Mullvad server from MQTT: {payload}')
+    # Put the selector back to the server actually in use
+    mqtt_publish_state()
+
+def start_mqtt():
+  """Connect to the MQTT broker in the background, reconnecting as needed."""
+  global mqtt_client
+  if not MQTT_HOST:
+    return
+  import paho.mqtt.client as mqtt
+  try:
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id='wirevad')
+  except AttributeError:
+    # paho-mqtt 1.x has no callback API versions
+    client = mqtt.Client(client_id='wirevad')
+  if MQTT_USERNAME:
+    client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+  client.will_set(f'{MQTT_TOPIC}/status', 'offline', retain=True)
+  client.on_connect = on_mqtt_connect
+  client.on_message = on_mqtt_message
+  client.reconnect_delay_set(min_delay=1, max_delay=60)
+  client.connect_async(MQTT_HOST, MQTT_PORT)
+  mqtt_client = client
+  client.loop_start()
+
 def main():
   """Main function to execute the script."""
   global WEB_PASSWORD
@@ -503,6 +617,7 @@ def main():
   wg_up('wirevadmullvad')
   wg_up('wirevadhost')
   clamp_mss()
+  start_mqtt()
 
 
 if __name__ == '__main__':

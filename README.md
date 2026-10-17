@@ -45,6 +45,10 @@ services:
       - PUID=1000 #Host user ID that should own /opt/wirevad (run: id -u). Leave empty to keep the files root-only
       - PGID=1000 #Host group ID that should own /opt/wirevad (run: id -g)
       - MSS=1240 #Max TCP segment size for VPN clients. The default avoids slow/stalling connections on lines with a reduced MTU (e.g. PPPoE). 0 disables
+      - MQTT_HOST= #Optional: MQTT broker for Home Assistant (e.g. 192.168.1.10). Leave empty to disable
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -64,3 +68,15 @@ Run ```docker-compose up -d```
 The WebUI is available on port 8000 and asks for the `WEB_USERNAME`/`WEB_PASSWORD` login. It shows every client's private key, so don't expose port 8000 to the internet.
 
 The files in `/opt/wirevad` contain private keys, so only their owner can read them. Set `PUID`/`PGID` to your host user's IDs to read them without `sudo`; otherwise they're owned by root.
+
+## Home Assistant
+
+Set `MQTT_HOST` (and `MQTT_USERNAME`/`MQTT_PASSWORD` if your broker needs them) and Wirevad appears in Home Assistant automatically via MQTT discovery, as a "Wirevad" device with:
+
+- **Mullvad location** - a selector listing every active Mullvad WireGuard server. Choosing one switches the tunnel live, the same as the web UI.
+- **Connected to Mullvad** - on/off
+- **Exit server** and **Exit IP**
+
+To switch server from an automation, publish a server hostname (e.g. `gb-lon-wg-001`) to `wirevad/location/set`, or use the `select.select_option` action on the selector.
+
+The broker should be on your LAN (`LAN_SUBNET`): the kill switch only lets the container reach the LAN or Mullvad. `MQTT_TOPIC` (default `wirevad`) and `MQTT_DISCOVERY_PREFIX` (default `homeassistant`) can be changed if needed.

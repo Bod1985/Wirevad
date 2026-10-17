@@ -9,7 +9,7 @@ ADD static /app/static
 RUN \
   echo "**** install dependencies ****" && \
   apk add --no-cache wireguard-tools iproute2 iptables openresolv bash curl ca-certificates \
-    python3 py3-flask py3-qrcode py3-pillow py3-requests py3-schedule
+    python3 py3-flask py3-qrcode py3-pillow py3-requests py3-schedule py3-paho-mqtt
 
 EXPOSE 51820/udp
 EXPOSE 8000

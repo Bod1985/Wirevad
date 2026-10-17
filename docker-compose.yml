@@ -20,6 +20,10 @@ services:
       - PUID=
       - PGID=
       - MSS=1240
+      - MQTT_HOST=
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
