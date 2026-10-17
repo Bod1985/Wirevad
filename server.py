@@ -7,6 +7,7 @@ import os
 import re
 import io
 import hmac
+import json
 import secrets
 import subprocess
 import threading
@@ -44,12 +45,18 @@ MSS = int(os.environ.get('MSS') or 1240)
 
 CONFIG_DIR = '/opt/wirevad'
 HOST_CONF = f'{CONFIG_DIR}/wirevadhost.conf'
+MULLVAD_CONF = f'{CONFIG_DIR}/wirevadmullvad.conf'
+RELAYS_CACHE = f'{CONFIG_DIR}/mullvad-relays.json'
+RELAYS_URL = 'https://api.mullvad.net/www/relays/wireguard/'
 
 app = Flask(__name__, template_folder='/app/templates', static_folder='/app/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
 # Latest result of the background Mullvad check, shown on the web UI
 connected = False
+# Active Mullvad WireGuard servers, for the location picker
+relays = []
+relay_lock = threading.Lock()
 
 def wg_down(interface):
   """Bring down the WireGuard interface."""
@@ -292,10 +299,82 @@ def check_mullvad():
     print(e)
     connected = False
 
+def refresh_relays():
+  """Fetch Mullvad's WireGuard server list, falling back to the copy saved last time."""
+  global relays
+  try:
+    response = requests.get(RELAYS_URL, timeout=20)
+    response.raise_for_status()
+    fetched = [{key: relay[key] for key in ('hostname', 'country_name', 'city_name', 'ipv4_addr_in', 'pubkey')}
+               for relay in response.json() if relay.get('active')]
+    if not fetched:
+      raise ValueError('server list was empty')
+    with open(RELAYS_CACHE, 'w') as f:
+      json.dump(fetched, f)
+    lock_down_config_dir()
+  except Exception as e:
+    print(f'Could not refresh the Mullvad server list: {e}')
+    if relays or not os.path.isfile(RELAYS_CACHE):
+      return
+    with open(RELAYS_CACHE) as f:
+      fetched = json.load(f)
+  relays = sorted(fetched, key=lambda r: (r['country_name'], r['city_name'], r['hostname']))
+
+def current_mullvad_peer():
+  """Return the (public key, endpoint) of the Mullvad server in wirevadmullvad.conf."""
+  with open(MULLVAD_CONF) as f:
+    peer = f.read().partition('[Peer]')[2]
+  public_key = re.search(r'(?m)^\s*PublicKey\s*=\s*(\S+)', peer)
+  endpoint = re.search(r'(?m)^\s*Endpoint\s*=\s*(\S+)', peer)
+  return (public_key.group(1) if public_key else None, endpoint.group(1) if endpoint else None)
+
+def current_relay():
+  """Return the server list entry for the Mullvad server in use, if it's in the list."""
+  if not relays or not os.path.isfile(MULLVAD_CONF):
+    return None
+  public_key, _ = current_mullvad_peer()
+  return next((r for r in relays if r['pubkey'] == public_key), None)
+
+def switch_relay(hostname):
+  """Move the Mullvad tunnel to another server without taking it down.
+
+  Your Mullvad key works with every server, so only the peer changes. The kill switch
+  stays in place throughout, so nothing leaks while the new server connects.
+  """
+  relay = next((r for r in relays if r['hostname'] == hostname), None)
+  if relay is None:
+    return False
+  with relay_lock:
+    old_key, old_endpoint = current_mullvad_peer()
+    if old_key is None or old_endpoint is None:
+      return False
+    if old_key == relay['pubkey']:
+      return True
+    # Keep the port from the existing config; every Mullvad server accepts the same ports
+    endpoint = f"{relay['ipv4_addr_in']}:{old_endpoint.rpartition(':')[2]}"
+    subprocess.run(['wg', 'set', 'wirevadmullvad',
+                    'peer', old_key, 'remove',
+                    'peer', relay['pubkey'], 'endpoint', endpoint, 'allowed-ips', '0.0.0.0/0'], check=True)
+
+    # Save the choice so it's used again after a restart
+    with open(MULLVAD_CONF) as f:
+      interface, _, peer = f.read().partition('[Peer]')
+    peer = re.sub(r'(?m)^(\s*PublicKey\s*=\s*)\S+', lambda m: m.group(1) + relay['pubkey'], peer)
+    peer = re.sub(r'(?m)^(\s*Endpoint\s*=\s*)\S+', lambda m: m.group(1) + endpoint, peer)
+    with open(MULLVAD_CONF, 'w') as f:
+      f.write(interface + '[Peer]' + peer)
+
+  print(f"Switched Mullvad server to {relay['hostname']} ({relay['city_name']}, {relay['country_name']}).")
+  # Give the new server a moment to connect before re-checking the status
+  threading.Timer(3, check_mullvad).start()
+  return True
+
 def run_scheduler():
-  """Check the Mullvad connection now and every 30 seconds after."""
+  """Check the Mullvad connection now and every 30 seconds after, and keep the server list fresh."""
   check_mullvad()
+  refresh_relays()
   schedule.every(30).seconds.do(check_mullvad)
+  schedule.every(12).hours.do(refresh_relays)
   while True:
     schedule.run_pending()
     time.sleep(1)
@@ -326,7 +405,27 @@ def index():
         qr_codes.append({'name': file_name, 'image': image_uri, 'link': download_link})
     qr_codes.sort(key=lambda x: int(x['name'][len('wirevadclient'):].split('.')[0]))
 
-    return render_template('index.html', qr_codes=qr_codes, connected=connected)
+    # Server list grouped by country for the location picker (relays is already sorted)
+    countries = {}
+    for relay in relays:
+      countries.setdefault(relay['country_name'], []).append(relay)
+
+    return render_template('index.html', qr_codes=qr_codes, connected=connected,
+                           countries=countries, current=current_relay())
+
+@app.route('/set_location', methods=['POST'])
+def set_location():
+  hostname = request.form.get('relay', '')
+  try:
+    switched = switch_relay(hostname)
+  except subprocess.CalledProcessError as e:
+    print(f'Switching Mullvad server failed: {e}')
+    switched = False
+  if switched:
+    flash(f'Switched Mullvad server to {hostname}.')
+  else:
+    flash(f'Could not switch to {hostname}.')
+  return redirect(url_for('index'))
 
 @app.route('/add_peer', methods=['POST'])
 def add_peer():

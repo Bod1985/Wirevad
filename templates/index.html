@@ -21,14 +21,37 @@
 </head>
     <body>
         <div id="mullvad-client-status" class="status"></div>
-        <div id="mullvad-status" class="{% if connected %}connected{% else %}not-connected{% endif %}">
-            {% if connected %}
+        {% set via_mullvad = connected and connected.mullvad_exit_ip %}
+        <div id="mullvad-status" class="{% if via_mullvad %}connected{% else %}not-connected{% endif %}">
+            {% if via_mullvad %}
                 Wirevad is connected to Mullvad
+                ({{ connected.city }}, {{ connected.country }} &ndash; {{ connected.mullvad_exit_ip_hostname }})
             {% else %}
                 Wirevad is not connected to Mullvad
             {% endif %}
         </div>
-        
+
+        {% if countries %}
+        <form class="location-picker" action="{{ url_for('set_location') }}" method="post">
+            <label for="relay">Mullvad location</label>
+            <select id="relay" name="relay">
+                {% if not current %}
+                <option value="" selected disabled>Choose a server</option>
+                {% endif %}
+                {% for country, servers in countries.items() %}
+                <optgroup label="{{ country }}">
+                    {% for server in servers %}
+                    <option value="{{ server.hostname }}" {% if current and current.hostname == server.hostname %}selected{% endif %}>
+                        {{ server.city_name }} &ndash; {{ server.hostname }}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+            <button type="submit">Switch</button>
+        </form>
+        {% endif %}
+
         <h1>QR Codes for WireGuard Peers</h1>
             {% with messages = get_flashed_messages() %}
             {% if messages %}

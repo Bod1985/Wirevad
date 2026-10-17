@@ -88,6 +88,30 @@ button, button a {
   color: red;
 }
 
+.location-picker {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin: 0 20px;
+}
+
+.location-picker select {
+  max-width: 100%;
+  font-size: 16px;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background-color: #2C2C2E;
+  color: #ffffff;
+}
+
+.location-picker button {
+  font-size: 18px;
+  margin: 0;
+}
+
 .remove-button {
   font-size: 14px;
   padding: 5px 10px;
