@@ -76,6 +76,8 @@ Set `MQTT_HOST` (and `MQTT_USERNAME`/`MQTT_PASSWORD` if your broker needs them) 
 - **Mullvad location** - a selector listing every active Mullvad WireGuard server. Choosing one switches the tunnel live, the same as the web UI.
 - **Connected to Mullvad** - on/off
 - **Exit server** and **Exit IP**
+- **Connected clients** - how many VPN clients are connected right now
+- For each VPN client: **Client N connected**, **last handshake**, and data **received**/**sent**. Entities are added and removed automatically as you add or remove peers.
 
 To switch server from an automation, publish a server hostname (e.g. `gb-lon-wg-001`) to `wirevad/location/set`, or use the `select.select_option` action on the selector.
 

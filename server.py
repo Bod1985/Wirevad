@@ -16,6 +16,7 @@ import base64
 from urllib.parse import urlsplit
 from flask import Flask, render_template, request, session, flash, redirect, url_for, Response, abort
 import time, requests, schedule, glob
+from datetime import datetime, timezone
 
 MULLVAD_ADDRESS = os.environ.get('MULLVAD_ADDRESS')
 FWMARK = os.environ.get('FWMARK')
@@ -390,6 +391,7 @@ def run_scheduler():
   refresh_relays()
   schedule.every(30).seconds.do(check_mullvad)
   schedule.every(12).hours.do(refresh_relays)
+  schedule.every(15).seconds.do(mqtt_publish_clients)
   while True:
     schedule.run_pending()
     time.sleep(1)
@@ -472,6 +474,7 @@ def set_location():
 @app.route('/add_peer', methods=['POST'])
 def add_peer():
   wg_addpeers(1)
+  mqtt_publish_clients()
   flash('New peer added successfully!')
   return redirect(url_for('index'))
 
@@ -479,6 +482,7 @@ def add_peer():
 def remove_peer(peer_index):
   """Remove a peer from the WireGuard configuration by its index."""
   if wg_removepeer(peer_index):
+    mqtt_publish_clients()
     flash('Peer removed successfully!')
   else:
     flash(f'Peer {peer_index} was not found.')
@@ -501,11 +505,48 @@ def clamp_mss():
                   '-m', 'tcpmss', '--mss', f'{MSS + 1}:65535', '-j', 'TCPMSS', '--set-mss', str(MSS)])
   print(f'Clamping VPN client TCP MSS to {MSS}.')
 
+# A client counts as connected if WireGuard heard from it this recently. WireGuard
+# re-handshakes every 2 minutes while a tunnel is in use.
+CLIENT_ACTIVE_SECONDS = 180
+
+def client_stats():
+  """Per-client WireGuard stats keyed by client number, or None if they can't be read."""
+  if not os.path.isfile(HOST_CONF):
+    return None
+  with open(HOST_CONF) as f:
+    keys = {key: int(n) for n, key in
+            re.findall(r'(?m)^# Client (\d+)\s*\n\[Peer\]\s*\nPublicKey\s*=\s*(\S+)', f.read())}
+  result = subprocess.run(['wg', 'show', 'wirevadhost', 'dump'], capture_output=True, text=True)
+  if result.returncode != 0:
+    return None
+  # After the interface line, each line is: public key, preshared key, endpoint,
+  # allowed IPs, latest handshake (epoch, 0 = never), bytes received, bytes sent, keepalive
+  live = {}
+  for line in result.stdout.splitlines()[1:]:
+    fields = line.split('\t')
+    if len(fields) >= 7:
+      live[fields[0]] = (int(fields[4]), int(fields[5]), int(fields[6]))
+  now = time.time()
+  stats = {}
+  for key, n in keys.items():
+    handshake, received, sent = live.get(key, (0, 0, 0))
+    stats[n] = {
+      'connected': 'ON' if handshake and now - handshake < CLIENT_ACTIVE_SECONDS else 'OFF',
+      'last_handshake': datetime.fromtimestamp(handshake, timezone.utc).isoformat() if handshake else None,
+      'received': received,
+      'sent': sent,
+    }
+  return stats
+
 # --- Home Assistant over MQTT ---------------------------------------------------
 # Wirevad announces itself with MQTT discovery as one "Wirevad" device: a selector
-# for the Mullvad server, plus sensors for the connection, exit server and exit IP.
+# for the Mullvad server, sensors for the connection, exit server and exit IP, a
+# connected-clients count, and a set of entities for each VPN client.
 
 mqtt_client = None
+# Client numbers whose entities have been announced to Home Assistant
+# (None until the client list has been read once)
+announced_clients = None
 
 DEVICE = {'identifiers': ['wirevad'], 'name': 'Wirevad', 'manufacturer': 'Wirevad', 'model': 'WireGuard + Mullvad'}
 
@@ -517,11 +558,61 @@ def mqtt_publish(topic, payload, retain=True):
   if mqtt_client is not None:
     mqtt_client.publish(topic, payload if isinstance(payload, str) else json.dumps(payload), retain=retain)
 
+def discovery_topic(component, key):
+  return f'{MQTT_DISCOVERY_PREFIX}/{component}/wirevad/{key}/config'
+
+def announce(component, key, config):
+  """Publish one entity's discovery config, attached to the Wirevad device."""
+  config.update(device=DEVICE, availability_topic=f'{MQTT_TOPIC}/status',
+                unique_id=f'wirevad_{key}', object_id=f'wirevad_{key}')
+  mqtt_publish(discovery_topic(component, key), config)
+
+def client_entities(n):
+  """The Home Assistant entities for VPN client number n, all read from one JSON topic."""
+  state = f'{MQTT_TOPIC}/client/{n}'
+  return [
+    ('binary_sensor', f'client_{n}', {'name': f'Client {n} connected', 'device_class': 'connectivity',
+                                      'state_topic': state, 'value_template': '{{ value_json.connected }}'}),
+    ('sensor', f'client_{n}_handshake', {'name': f'Client {n} last handshake', 'device_class': 'timestamp',
+                                         'state_topic': state, 'value_template': '{{ value_json.last_handshake }}'}),
+    ('sensor', f'client_{n}_received', {'name': f'Client {n} received', 'device_class': 'data_size',
+                                        'unit_of_measurement': 'B', 'state_class': 'total_increasing',
+                                        'state_topic': state, 'value_template': '{{ value_json.received }}'}),
+    ('sensor', f'client_{n}_sent', {'name': f'Client {n} sent', 'device_class': 'data_size',
+                                    'unit_of_measurement': 'B', 'state_class': 'total_increasing',
+                                    'state_topic': state, 'value_template': '{{ value_json.sent }}'}),
+  ]
+
+def mqtt_publish_clients(rediscover=False):
+  """Publish VPN client stats, announcing new clients and removing deleted ones."""
+  global announced_clients
+  if mqtt_client is None:
+    return
+  stats = client_stats()
+  if stats is None:
+    return
+  current = set(stats)
+  previous = announced_clients or set()
+  for n in sorted(current if rediscover else current - previous):
+    for component, key, config in client_entities(n):
+      announce(component, key, config)
+  for n in previous - current:
+    clear_client(n)
+  announced_clients = current
+  for n, client in stats.items():
+    mqtt_publish(f'{MQTT_TOPIC}/client/{n}', client)
+  mqtt_publish(f'{MQTT_TOPIC}/clients/connected', str(sum(c['connected'] == 'ON' for c in stats.values())))
+
+def clear_client(n):
+  """Remove a deleted client's entities from Home Assistant (an empty config deletes them)."""
+  for component, key, _ in client_entities(n):
+    mqtt_publish(discovery_topic(component, key), '')
+  mqtt_publish(f'{MQTT_TOPIC}/client/{n}', '')
+
 def mqtt_publish_discovery():
   """Tell Home Assistant about Wirevad's entities."""
   if mqtt_client is None:
     return
-  common = {'device': DEVICE, 'availability_topic': f'{MQTT_TOPIC}/status'}
   entities = [
     ('binary_sensor', 'mullvad', {'name': 'Connected to Mullvad', 'device_class': 'connectivity',
                                   'state_topic': f'{MQTT_TOPIC}/mullvad/connected'}),
@@ -529,6 +620,9 @@ def mqtt_publish_discovery():
                                'state_topic': f'{MQTT_TOPIC}/mullvad/server'}),
     ('sensor', 'exit_ip', {'name': 'Exit IP', 'icon': 'mdi:ip-network',
                            'state_topic': f'{MQTT_TOPIC}/mullvad/ip'}),
+    ('sensor', 'clients_connected', {'name': 'Connected clients', 'icon': 'mdi:account-multiple',
+                                     'state_class': 'measurement',
+                                     'state_topic': f'{MQTT_TOPIC}/clients/connected'}),
   ]
   # The selector needs the server list, so it's only announced once that's loaded
   if relays:
@@ -537,9 +631,9 @@ def mqtt_publish_discovery():
                                             'command_topic': f'{MQTT_TOPIC}/location/set',
                                             'options': [relay_option(r) for r in relays]}))
   for component, key, config in entities:
-    config.update(common, unique_id=f'wirevad_{key}', object_id=f'wirevad_{key}')
-    mqtt_publish(f'{MQTT_DISCOVERY_PREFIX}/{component}/wirevad/{key}/config', config)
+    announce(component, key, config)
   mqtt_publish_state()
+  mqtt_publish_clients(rediscover=True)
 
 def mqtt_publish_state():
   """Publish the current Mullvad server and connection status."""
@@ -563,12 +657,20 @@ def on_mqtt_connect(client, userdata, flags, rc):
   # Home Assistant announces itself here when it restarts; re-send discovery then
   client.subscribe(f'{MQTT_DISCOVERY_PREFIX}/status')
   mqtt_publish_discovery()
+  # The broker replays our retained entity configs; any for clients deleted while
+  # Wirevad was down get cleared in on_mqtt_message
+  client.subscribe(f'{MQTT_DISCOVERY_PREFIX}/+/wirevad/+/config')
 
 def on_mqtt_message(client, userdata, message):
   payload = message.payload.decode(errors='replace').strip()
   if message.topic == f'{MQTT_DISCOVERY_PREFIX}/status':
     if payload == 'online':
       mqtt_publish_discovery()
+    return
+  if message.topic.endswith('/config'):
+    stale = re.fullmatch(rf'{re.escape(MQTT_DISCOVERY_PREFIX)}/\w+/wirevad/client_(\d+)(_\w+)?/config', message.topic)
+    if stale and payload and announced_clients is not None and int(stale.group(1)) not in announced_clients:
+      clear_client(int(stale.group(1)))
     return
   # Accept the selector's option text or a bare hostname (handy in automations)
   hostname = payload.split(' ', 1)[0]
